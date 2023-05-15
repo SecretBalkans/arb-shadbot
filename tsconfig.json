@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "rootDir": "src",
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "outDir": "build",
+    "allowSyntheticDefaultImports": true,
+    "allowJs": true,
+    "target": "ES6",
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "lib": [
+      "es6",
+      "es2020.bigint",
+      "DOM"
+    ]
+  },
+  "include": [
+    "src",
+    "src/ts/brand.d.ts"
+  ],
+  "exclude": [
+    "build",
+    "node_modules",
+    ".secrets.js"
+  ]
+}

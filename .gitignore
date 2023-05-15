@@ -1,0 +1,13 @@
+dist/
+build/
+node_modules/
+logs
+*.log
+npm-debug.log*
+package-lock.json
+.secrets.js
+.npm
+.idea
+!.vscode/tasks.js
+.vscode
+isolate*
