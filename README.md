@@ -19,6 +19,9 @@ More on this in the [pitch deck](https://www.canva.com/design/DAFizPIwA98/jj4Z42
 ShadBot brings the infrastructure for monitoring and execution of different strategies. The final version will implement smart contract vaults which allow permissionless hedge funding. The governance model will also be introduced, which will provide more robustness and trust in the protocol.
 
 ## Architecture
+
+> Go to bottom of this README for installation instructions
+
 ### Arb Monitor
 Its goal is to observe the blockchain and capture different arbitrage opportunities. <br/>
 For further info checkout [monitor](https://github.com/SecretBalkans/arb.js.git)
@@ -46,10 +49,32 @@ We build mostly everything in typescript. We utilized libraries from Cosmos foun
 - [Demo video](https://youtu.be/mL3C7FiJki4) 
 - [Pitch deck](https://www.canva.com/design/DAFizPIwA98/jj4Z42WymYcH_-xhEuLG5Q/view?utm_content=DAFizPIwA98&utm_campaign=designshare&utm_medium=link&utm_source=publishsharelink)
 
-## How to run?
+# Installation
+
+Tested with: `node v16.17.0` 
+
+The main thing you need to do before you run the `test-bot` is to create your own `.secrets.js`.
+
+To easiest way is to use the provided template of `.secrets.js.example`. 
+
+1. Copy + Paste `.secrets.js.example` and rename it to `.secrets.js`.
+
+2. '.secrets.js' is included in `.gitignore` and should never be committed.
+
+3. You need to input your secrets in that file now:
+   1. First input one of `privateHex` OR `mnemonic`. Mnemonic can be base64 encoded so it is not in plain text on your computer. Only one is needed. They will be used to generate and operate on the wallets in the supported chains and they should hold tokens if arb is to be executed.
+   2. You need to go ahead and generate some entropy for a secret api key.
+   3. This can be done by copying an existing viewing key from Keplr let's say or you can generate one yourself by calling some SecretNetwork token contract. An example on how to do that is given in the `.secrets.js.example` file
+
+``
+!IMPORTANT! The bot will first spend some SCRT tokens (less than 1) to set it's viewing key (the one you've put in the .secrets.js) in order to start monitoring the Secret balances.
+``
+
+
+# How to run?
 1. Run dockerized hasura + postgres
 2. Start the dashboard
 3. Start the arb monitor
-4. Start the bot
+4. Start the bot via `test-bot.ts`. Check out the code to see what it does and run it.
 
 Description on how to run each can be found it the appropriate repo.
