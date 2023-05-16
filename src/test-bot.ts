@@ -143,7 +143,7 @@ const bot0Wallet = new ArbWallet({
     logger.log(`Started. Will connect to ${monitorId}.`);
     const balanceMonitor = new BalanceMonitor();
     const executor = new ArbBuilder(bot0Wallet, balanceMonitor);
-
+    balanceMonitor.enableLocalDBUpdates();
     ipc.connectTo(
       monitorId,
       function() {

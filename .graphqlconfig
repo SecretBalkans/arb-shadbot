@@ -1,10 +1,17 @@
 {
-  "name": "Untitled GraphQL Schema",
+  "name": "Unified GraphQL Schema",
   "schemaPath": "schema.graphql",
   "extensions": {
     "endpoints": {
       "Default GraphQL Endpoint": {
-        "url": "<<<HASURA_URL>>>",
+        "url": "https://<MonitorURL>:8080/v1/graphql",
+        "headers": {
+          "user-agent": "JS GraphQL"
+        },
+        "introspect": false
+      },
+      "Local GraphQL Endpoint": {
+        "url": "http://localhost:8080/v1/graphql",
         "headers": {
           "user-agent": "JS GraphQL"
         },

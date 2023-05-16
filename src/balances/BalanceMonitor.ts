@@ -11,6 +11,8 @@ import BigNumber from 'bignumber.js';
 import {convertCoinFromUDenomV2} from '../utils/denoms';
 import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from '../executor/MoveIBC';
 import {DenomInfo} from '../ibc/tokens';
+import {execute} from "../graphql/gql-execute";
+import gql from 'graphql-tag';
 
 export interface SerializedBalanceUpdate {
   chain: CHAIN,
@@ -81,6 +83,7 @@ export interface CanLog {
 export class BalanceMonitor implements CanLog {
   private readonly balances: Partial<Record<CHAIN, BalanceMap>> = {};
   logger: Logger;
+  private enabledLocalDBUpdate: Boolean;
 
   constructor() {
     this.logger = new Logger('BalanceMonitor');
@@ -103,6 +106,33 @@ export class BalanceMonitor implements CanLog {
       this.balances[balanceUpdate.chain].updateBalances(balanceUpdate);
     }
     this.events.emit('balance', balanceUpdate);
+  }
+
+  private readonly BOT_ID = "dea2ae0b-9909-4c79-8e31-a9376957c3f6";
+
+  public enableLocalDBUpdates() {
+    if (!this.enabledLocalDBUpdate) {
+      this.logger.log('Enabled local db bot balance updates!'.green);
+      this.enabledLocalDBUpdate = true;
+      this.events.on('balance', (balanceUpdate: SerializedBalanceUpdate) => {
+        let balanceObject = {
+          balances: _(balanceUpdate.balances).toPairs().map(([key, val]) => {
+            return [SwapTokenMap[key], convertCoinFromUDenomV2(val.amount, val.denomInfo.decimals).toFixed(val.denomInfo.decimals)];
+          }).fromPairs().value(),
+          bot_id: this.BOT_ID,
+          chain_id: balanceUpdate.chain
+        };
+        execute(gql`
+            mutation updateBalances($object: bot_balances_insert_input! = {}) {
+                insert_bot_balances_one (on_conflict: {constraint: bot_balances_bot_id_chain_id_key, update_columns: [balances, bot_id, chain_id]}, object: $object) {
+                    id
+                }
+            }
+        `, {
+          object: balanceObject
+        }).catch(err => this.logger.error('GQL', err))
+      })
+    }
   }
 
   public async waitForChainBalanceUpdate(chain: CHAIN, token: SwapToken, {
