@@ -28,8 +28,8 @@ The code for the bot is [here](https://github.com/SecretBalkans/arb-shadbot)
 Enables for the easy and fast retrieval of the data, which is queried from the dashboard. Monitor stores the arbitrage opportunities, execution routes in the database. Bot will store the execution logs. <br/>
 For more info checkout [localHasura](https://github.com/SecretBalkans/localHasura).
 ### Dashboard
-Front-end web app that gives an insight in the bot operation and funds held by the bot. It provides a functionality to manage the bot.
-To see the code checkout [shadbotClient](https://github.com/SecretBalkans/shadbot_client)
+Front-end web app that gives an insight in the bot operation and funds held by the bot. It provides a functionality to manage the bot. <br/>
+To see the code checkout [Dashboard](https://github.com/SecretBalkans/shadbot_client)
 ### Dockerized local network
 We also created simple testing environment consisting of:
 - Hermes relayer
@@ -43,4 +43,4 @@ We build mostly everything in typescript. We utilized libraries from Cosmos foun
 
 ## Resources
 - Demo video: 
-- Pitch deck: 
+- [Pitch deck](https://www.canva.com/design/DAFizPIwA98/jj4Z42WymYcH_-xhEuLG5Q/view?utm_content=DAFizPIwA98&utm_campaign=designshare&utm_medium=link&utm_source=publishsharelink)
