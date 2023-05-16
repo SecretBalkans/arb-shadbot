@@ -1,14 +1,15 @@
-import { BalanceMonitor, BalanceUpdate, SerializedBalanceUpdate, subscribeBalances } from './balances/BalanceMonitor';
-import { SUPPORTED_CHAINS } from './ibc';
-import { Logger } from './utils';
+import {BalanceMonitor, BalanceUpdate, SerializedBalanceUpdate, subscribeBalances} from './balances/BalanceMonitor';
+import {CHAIN, SUPPORTED_CHAINS} from './ibc';
+import {Logger} from './utils';
 import ipc from 'node-ipc';
 import colors from '@colors/colors';
 import cluster from 'cluster';
-import { Prices, subscribePrices } from './prices/prices';
-import { ArbWallet } from './wallet/ArbWallet';
-import { ArbV1Raw, parseRawArbV1, subscribeLiveArb, toRawArbV1 } from './gqlClient';
+import {Prices, subscribePrices} from './prices/prices';
+import {ArbWallet} from './wallet/ArbWallet';
+import {ArbV1Raw, parseRawArbV1, subscribeLiveArb, toRawArbV1} from './monitorGqlClient';
 import ArbBuilder from './executor/ArbBuilder';
 import config from './config';
+import {SwapToken} from "./ibc/dexTypes";
 
 colors.enable();
 
@@ -144,6 +145,8 @@ const bot0Wallet = new ArbWallet({
     const balanceMonitor = new BalanceMonitor();
     const executor = new ArbBuilder(bot0Wallet, balanceMonitor);
     balanceMonitor.enableLocalDBUpdates();
+    // HACK: delay some time to wait for secret funds to be resolved
+    await new Promise(resolve => setTimeout(resolve, 15000));
     ipc.connectTo(
       monitorId,
       function() {

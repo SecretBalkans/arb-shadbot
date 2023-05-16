@@ -2,6 +2,8 @@ import { Tendermint34Client } from '@cosmjs/tendermint-rpc';
 import { Observable } from 'rxjs';
 import { Logger } from '../utils';
 const logger = new Logger('CosmosObserver');
+let blockTime = 6000; // TODO: 1s for Injective
+
 export default function cosmosObserver(rpcEndpoint: string, retryTime = 1000): Observable<number> {
   return new Observable(observer => {
     (async () => {
@@ -33,6 +35,7 @@ export default function cosmosObserver(rpcEndpoint: string, retryTime = 1000): O
           await new Promise(resolve => setTimeout(resolve, retryTime));
         } while (true);
         observer.next(prevHeight);
+        await new Promise(resolve => setTimeout(resolve, blockTime - retryTime));
       } while (true);
     })().catch((err) => observer.error(err));
   });

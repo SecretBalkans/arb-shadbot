@@ -196,10 +196,9 @@ const chainInfos = (
     },
     {
       rpc: 'https://rpc.secret.express',
-      // rest: "https://secret-api.lavenderfive.com:443",
       // rest: 'https://lcd-secret.whispernode.com:443',
       rest: "https://lcd.secret.express",
-      //rest: "https://api.scrt.network/",
+      // rest: "https://api.scrt.network/",
       chainId: 'secret-4',
       chainName: 'Secret Network',
       bip44: {
@@ -288,7 +287,7 @@ const chainInfos = (
         {
           type: 'cw20',
           contractAddress: 'secret1k6u0cy4feepm6pehnz804zmwakuwdapm69tuc4',
-          coinDenom: 'stkd-SCRT',
+          coinDenom: 'stkdSCRT',
           coinMinimalDenom:
             'cw20:secret1k6u0cy4feepm6pehnz804zmwakuwdapm69tuc4:stkd-SCRT',
           coinDecimals: 6,

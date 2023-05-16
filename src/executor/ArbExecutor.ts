@@ -1,4 +1,4 @@
-import {ArbV1} from "../gqlClient";
+import {ArbV1} from "../monitorGqlClient";
 import {ArbWallet} from "../wallet/ArbWallet";
 import {BalanceMonitor} from "../balances/BalanceMonitor";
 import Aigle from "aigle";

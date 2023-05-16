@@ -1,32 +1,32 @@
-import { DirectSecp256k1HdWallet, DirectSecp256k1Wallet, Registry } from '@cosmjs/proto-signing';
-import { defaultRegistryTypes, SigningStargateClient } from '@cosmjs/stargate';
+import {DirectSecp256k1HdWallet, DirectSecp256k1Wallet, Registry} from '@cosmjs/proto-signing';
+import {defaultRegistryTypes, SigningStargateClient} from '@cosmjs/stargate';
 import fs from 'fs';
-import { AccountData, AminoSignResponse, StdSignDoc } from 'secretjsbeta/dist/wallet_amino';
+import {AccountData, AminoSignResponse, StdSignDoc} from 'secretjsbeta/dist/wallet_amino';
 
-import { Secp256k1Pen } from './Secp256k1Pen';
-import { Secp256k1Wallet, StdSignature } from '@cosmjs/launchpad';
-import { Bip39, EnglishMnemonic, Slip10, Slip10Curve, stringToPath } from '@cosmjs/crypto';
-import { fromBase64, MsgExecuteContract, SecretNetworkClient } from 'secretjsbeta';
+import {Secp256k1Pen} from './Secp256k1Pen';
+import {Secp256k1Wallet, StdSignature} from '@cosmjs/launchpad';
+import {Bip39, EnglishMnemonic, Slip10, Slip10Curve, stringToPath} from '@cosmjs/crypto';
+import {fromBase64, MsgExecuteContract, SecretNetworkClient} from 'secretjsbeta';
 
-import { SignDoc } from 'secretjsbeta/dist/protobuf/cosmos/tx/v1beta1/tx';
-import { serializeSignDoc, serializeStdSignDoc } from './signUtils';
+import {SignDoc} from 'secretjsbeta/dist/protobuf/cosmos/tx/v1beta1/tx';
+import {serializeSignDoc, serializeStdSignDoc} from './signUtils';
 import _ from 'lodash';
 
-import { CHAIN, getChainByChainId, getChainInfo, getTokenDenomInfo, SecretContractAddress } from '../ibc';
-import { DenomInfo } from '../ibc/tokens';
-import { Amount, Denom, isSwapToken, SwapToken, SwapTokenMap, Token } from '../ibc/dexTypes';
-import { CosmWasmClient } from '@cosmjs/cosmwasm-stargate';
-import { fetchTimeout, Logger } from '../utils';
-import { initPairsRaw, initTokens } from '../ibc/shade-resgistry/shadeRest';
-import { getShadeTokenBySymbol } from '../ibc/shade-resgistry/tokens';
-import { convertCoinFromUDenomV2, convertCoinToUDenomV2, makeIBCMinimalDenom } from '../utils/denoms';
-import { Brand } from '../ts';
+import {CHAIN, getChainByChainId, getChainInfo, getTokenDenomInfo, SecretContractAddress} from '../ibc';
+import {DenomInfo} from '../ibc/tokens';
+import {Amount, Denom, isSwapToken, SwapToken, SwapTokenMap, Token} from '../ibc/dexTypes';
+import {CosmWasmClient} from '@cosmjs/cosmwasm-stargate';
+import {fetchTimeout, Logger} from '../utils';
+import {initPairsRaw, initTokens} from '../ibc/shade-resgistry/shadeRest';
+import {getShadeTokenBySymbol} from '../ibc/shade-resgistry/tokens';
+import {convertCoinFromUDenomV2, convertCoinToUDenomV2, makeIBCMinimalDenom} from '../utils/denoms';
+import {Brand} from '../ts';
 import Aigle from 'aigle';
 import BigNumber from 'bignumber.js';
 import path from 'path';
-import { loadSync } from 'protobufjs';
-import { SerializedBalanceUpdate } from '../balances/BalanceMonitor';
-import { accountFromAnyStrideSupport } from './customAccountParser';
+import {loadSync} from 'protobufjs';
+import {SerializedBalanceUpdate} from '../balances/BalanceMonitor';
+import {accountFromAnyStrideSupport} from './customAccountParser';
 
 const logger = new Logger('ArbWallet');
 export type ArbWalletConfig = { mnemonic?: string, privateHex?: string, secretNetworkViewingKey: string };
@@ -61,6 +61,7 @@ export class ArbWallet {
   counterpartyChains: Partial<Record<CHAIN, Record<IBCChannel, CHAIN | string>>> = {};
   logger: Logger = new Logger('ArbWallet');
   mapOfZonesData: any[];
+  private isFetchingSecret: Boolean;
 
   public async initSecretRegistry() {
     await Promise.all([
@@ -81,10 +82,10 @@ export class ArbWallet {
     safe = true,
     retrying = false,
     suffix = '0',
-  } = {}): Promise<number> {
+  } = {}): Promise<Amount | -1> {
     if (chain === CHAIN.Secret && asset !== SwapToken.SCRT) {
-      const secretAddress = this.getSecretAddress(asset);
-      return this.getSecretBalance(secretAddress);
+      const secretToken = this.getSecretAddress(asset);
+      return this.getSecretBalance(secretToken);
     }
     let tokenDenomInfo;
     try {
@@ -129,7 +130,7 @@ export class ArbWallet {
           } catch (err) {
             if (!retrying) {
               await new Promise(resolve => setTimeout(resolve, 3000));
-              return this.getBalance(chain, asset, { retrying: true });
+              return this.getBalance(chain, asset, {retrying: true});
             }
           }
         })(),
@@ -138,10 +139,10 @@ export class ArbWallet {
         throw new Error(`Get balance timeout on ${chain} for ${tokenDenomInfo}`);
       }
       try {
-        return receiverBalance ? +receiverBalance.amount / (10 ** (rawAssetDecimals || decimals)) : 0;
+        return receiverBalance ? convertCoinFromUDenomV2(receiverBalance.amount, rawAssetDecimals || decimals) : BigNumber(0);
       } catch (err) {
         console.error('Error', err, 'Will continue');
-        return 0;
+        return BigNumber(0);
       }
     }
   }
@@ -201,7 +202,7 @@ export class ArbWallet {
     chain: CHAIN,
     pathSuffix = '0',
   ) {
-    const { bech32Config, bip44: { coinType } } = getChainInfo(chain);
+    const {bech32Config, bip44: {coinType}} = getChainInfo(chain);
     const mnemonic = this.config.mnemonic;
     if (mnemonic) {
       let parsedMnemonic = mnemonic;
@@ -235,7 +236,7 @@ export class ArbWallet {
       const mnemonicChecked = new EnglishMnemonic(parsedMnemonic);
       const seed = await Bip39.mnemonicToSeed(mnemonicChecked);
       const path = stringToPath(`m/44'/${coinType}'/${pathSuffix.includes('/') ? pathSuffix : `0'/0/${pathSuffix}`}`);
-      const { privkey } = Slip10.derivePath(Slip10Curve.Secp256k1, seed, path);
+      const {privkey} = Slip10.derivePath(Slip10Curve.Secp256k1, seed, path);
       return await Secp256k1Wallet.fromKey(privkey, bech32prefix);
     } else {
       const privateKey = this.getPrivateKey();
@@ -341,24 +342,33 @@ export class ArbWallet {
    * TODO: just pass decimals and handle SNIP-20/SNIP-25 by querying token info and fetching the decimals
    @param asset.address string
    @param asset.decimals number
+   @param asset.codeHash? string
    * */
-  public async getSecretBalance(asset: { address: SecretContractAddress, decimals: number }): Promise<number> {
+  public async getSecretBalance(asset: { address: SecretContractAddress, codeHash?: string, decimals: number }, noViewingKeySet = false): Promise<Amount> {
     const client = await this.getSecretNetworkClient();
     const result = await this.querySecretContract(asset.address, {
       balance: {
         key: this.config.secretNetworkViewingKey,
         address: client.address,
       },
-    }) as any;
-    if (result.viewing_key_error?.msg === 'Wrong viewing key for this address or viewing key not set') {
-      await this.executeSecretContract(asset.address, {
+    }, asset.codeHash) as any;
+    if (!noViewingKeySet && (_.isString(result) && result.includes('"unauthorized"')) || result.viewing_key_error?.msg === 'Wrong viewing key for this address or viewing key not set') {
+      let tx = await this.executeSecretContract(asset.address, {
         set_viewing_key: {
           key: this.config.secretNetworkViewingKey,
         },
-      }, 0.00155);
+      }, 0.0175, 175_000, false);
+      for (let i = 0; i < 60; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        let amount = await this.getSecretBalance(asset, true);
+        if (amount) {
+          return amount;
+        }
+      }
+      this.logger.log('ViewingKey', tx.rawLog);
       return this.getSecretBalance(asset);
     }
-    return +result.balance.amount / (10 ** asset.decimals);
+    return result?.balance?.amount ? convertCoinFromUDenomV2(result?.balance?.amount, asset.decimals) : null;
   }
 
   /**
@@ -371,7 +381,7 @@ export class ArbWallet {
   public async querySecretContract<T extends object, R extends any>(contractAddress: SecretContractAddress, msg: T, codeHash?: string, useResultCache = false) {
     const client = await this.getSecretNetworkClient();
     if (codeHash || !this.CODE_HASH_CACHE[contractAddress]) {
-      this.CODE_HASH_CACHE[contractAddress] = (await client.query.compute.codeHashByContractAddress({ contract_address: contractAddress })).code_hash;
+      this.CODE_HASH_CACHE[contractAddress] = (await client.query.compute.codeHashByContractAddress({contract_address: contractAddress})).code_hash;
     }
     let cached;
     const cacheKey = `${contractAddress}.${Object.getOwnPropertyNames(msg)[0]}`;
@@ -399,7 +409,7 @@ export class ArbWallet {
    * @param gasPrice
    * @param gasLimit
    */
-  public async executeSecretContract(contractAddress: string, msg: any, gasPrice = 0.015, gasLimit = 1700000) {
+  public async executeSecretContract(contractAddress: string, msg: any, gasPrice = 0.015, gasLimit = 1700000, waitForCommit = true) {
     const client = await this.getSecretNetworkClient();
     if (!this.CODE_HASH_CACHE[contractAddress]) {
       this.CODE_HASH_CACHE[contractAddress] = (await client.query.compute.codeHashByContractAddress({
@@ -413,27 +423,48 @@ export class ArbWallet {
       sender: client.address,
       msg,
     })], {
-      waitForCommit: true,
+      waitForCommit,
       gasLimit,
       gasPriceInFeeDenom: gasPrice,
       feeDenom: 'uscrt',
     });
   }
 
-  private getSecretAddress(asset: SwapToken): { address: SecretContractAddress, decimals: number } {
+  private getSecretAddress(asset: SwapToken): { address: SecretContractAddress, codeHash: string, decimals: number } {
     const shadeToken = getShadeTokenBySymbol(SwapTokenMap[asset]);
     return {
       address: shadeToken.contract_address,
       decimals: shadeToken.decimals,
+      codeHash: shadeToken.code_hash,
     };
   }
 
   async getBalancesOnChain(chain: CHAIN, suffix = '0'): Promise<BalanceMap> {
     await this.initIBCInfoCache();
+    let secretBalances: TokenBalanceMapWithDenomInfo = {};
     const rpcClient = await this.getClient(chain, false, suffix);
     const address = await this.getAddress(chain, suffix);
+    if (chain === CHAIN.Secret) {
+      if (this.isFetchingSecret) {
+        return; // exit early while fetching early to avoid duplicating tasks
+      } else {
+        this.isFetchingSecret = true;
+        secretBalances = _.fromPairs(await Aigle.mapSeries(Object.keys(SwapTokenMap), async (swapToken) => {
+          let token = SwapTokenMap[swapToken];
+          let secretTokenInfo = this.getSecretAddress(token);
+          try {
+            let balance = await this.getSecretBalance(secretTokenInfo);
+            return [swapToken, {denomInfo: getTokenDenomInfo(token, true), amount: balance}]
+          } catch (err) {
+            this.logger.debugOnce(err.message);
+            return []
+          }
+        }))
+        this.isFetchingSecret = false;
+      }
+    }
     const balancesRaw = await rpcClient.getAllBalances(address);
-    return new BalanceMap(chain, this.parseTokenBalances(chain, balancesRaw as BalancesRaw));
+    return new BalanceMap(chain, {...secretBalances, ...this.parseTokenBalances(chain, balancesRaw as BalancesRaw)});
   }
 
   parseTokenBalances(chain: CHAIN, balancesRaw: BalancesRaw): TokenBalanceMapWithDenomInfo {
@@ -501,7 +532,7 @@ export class ArbWallet {
         counterpartyChannelId: c.counterparty?.channel_id,
       }));
     }
-    return _.find(this.counterpartyChannelIds[chain], { channelId })?.counterpartyChannelId;
+    return _.find(this.counterpartyChannelIds[chain], {channelId})?.counterpartyChannelId;
   }
 
   getTransferChannelId(sourceChain: CHAIN, destinationChain: CHAIN): IBCChannel | undefined {
@@ -512,7 +543,7 @@ export class ArbWallet {
     const restUrl = getChainInfo(chain).rest;
     const channelsRpcUrl = `${restUrl}/ibc/core/channel/v1/channels?pagination.limit=3000`;
     try {
-      let { channels } = await fetchTimeout(channelsRpcUrl, {}, 30000);
+      let {channels} = await fetchTimeout(channelsRpcUrl, {}, 30000);
       const map = await Aigle.mapLimit(
         _.filter(channels, ({
                               channel_id,
@@ -559,7 +590,7 @@ export class ArbWallet {
     })) {
       allChainChannelGroups = _.fromPairs(await Aigle.mapLimit(this.supportedChains, 5, async (chain) => {
         const pick = _(await this.fetchChannelGroups(chain)).pick(this.supportedChains).toPairs().map(([chain, ibcs]) => [chain, _.map(ibcs, 'channelId')]).fromPairs().value();
-        fs.writeFileSync(this.getFsCachePath(chain), JSON.stringify(pick), { encoding: 'utf-8' });
+        fs.writeFileSync(this.getFsCachePath(chain), JSON.stringify(pick), {encoding: 'utf-8'});
         return [chain, pick];
       }));
       this.logger.log('IBC info reloaded for all chains.')
@@ -577,7 +608,7 @@ export class ArbWallet {
           });
           return (channelMapOfZonesData?.ibc_tx_success_rate || 0) * channelMapOfZonesData?.ibc_cashflow_in; // pick most successful highest cashflow
         });
-        if(!maxChannel) {
+        if (!maxChannel) {
           this.logger.debugOnce(`Error choosing channel between ${chain}-${otherChain} from ${channelIds}`.red);
         }
         return [otherChain, maxChannel];
@@ -629,11 +660,11 @@ ft_channels_stats (
         'headers': {
           'content-type': 'application/json',
         },
-        'body': JSON.stringify({ query, variables: null }),
+        'body': JSON.stringify({query, variables: null}),
         'method': 'POST',
       });
       if (mapOfZonesData.errors) {
-        this.logger.debugOnce(`MapOfZones error ${JSON.stringify(mapOfZonesData)} ${JSON.stringify({ body: query }, null, 2)}`.red);
+        this.logger.debugOnce(`MapOfZones error ${JSON.stringify(mapOfZonesData)} ${JSON.stringify({body: query}, null, 2)}`.red);
         throw new Error(`MapOfZones fetch error`);
       }
       mapOfZonesData = mapOfZonesData.data.ft_channels_stats
@@ -723,7 +754,7 @@ export class BalanceMap {
 
 
   toJSON(): SerializedBalanceMap {
-    return _(this.tokenBalances).toPairs().map(([token, { amount, denomInfo }]) => [token, {
+    return _(this.tokenBalances).toPairs().map(([token, {amount, denomInfo}]) => [token, {
       denomInfo,
       amount: convertCoinToUDenomV2(amount, denomInfo.decimals),
     }]).fromPairs().value();
@@ -733,13 +764,13 @@ export class BalanceMap {
     return JSON.stringify(
       _.zipObject(
         Object.keys(this.tokenBalances),
-        _.map(this.tokenBalances, ({ amount }) => amount.toString())), null, 4);
+        _.map(this.tokenBalances, ({amount}) => amount.toString())), null, 4);
   }
 
   public diff(pastBalanceMap?: BalanceMap): BalanceMap {
     const newBalancesRaw = _.compact(_.map(this.tokenBalances, ({
                                                                   amount,
-                                                                  denomInfo: { decimals, chainDenom },
+                                                                  denomInfo: {decimals, chainDenom},
                                                                 }, token) => {
       const pastBalance = pastBalanceMap?.tokenBalances[token]?.amount;
       const diffAmount = pastBalance ? BigNumber(amount).minus(pastBalance) : amount;
@@ -748,10 +779,10 @@ export class BalanceMap {
         amount: convertCoinToUDenomV2(diffAmount, decimals).toString(),
       } : null;
     }));
-    _.forEach(pastBalanceMap?.tokenBalances, ({ denomInfo: { chainDenom }, amount }) => {
-      if (!_.find(this.tokenBalances, { denomInfo: { chainDenom: chainDenom } })) {
+    _.forEach(pastBalanceMap?.tokenBalances, ({denomInfo: {chainDenom}, amount}) => {
+      if (!_.find(this.tokenBalances, {denomInfo: {chainDenom: chainDenom}})) {
         // if we do not have the past denom, then add it with a -
-        newBalancesRaw.push({ chainDenom: chainDenom, amount: '-' + amount });
+        newBalancesRaw.push({chainDenom: chainDenom, amount: '-' + amount});
       } else {
         // do nothing as we have already subtracted amounts that we have
       }

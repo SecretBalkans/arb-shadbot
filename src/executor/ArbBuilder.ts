@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import {ArbV1} from '../gqlClient';
+import {ArbV1} from '../monitorGqlClient';
 import {CHAIN, getChainByChainId, getDexOriginChain, getTokenDenomInfo} from '../ibc';
 import {Amount, DexProtocolName, Token} from '../ibc/dexTypes';
 import {Prices} from '../prices/prices';

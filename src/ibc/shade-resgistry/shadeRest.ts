@@ -14,7 +14,7 @@ export let pairs;
 
 const shadeApiHttpsAgent = new https.Agent({
   keepAlive: true,
-  keepAliveMsecs: 3000,
+  keepAliveMsecs: 5000,
   maxSockets: 5,
 });
 

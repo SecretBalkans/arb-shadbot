@@ -55,15 +55,16 @@ const dexOriginChains: Record<DexProtocolName, CHAIN> = { osmosis: CHAIN.Osmosis
 export function getDexOriginChain(dex: DexProtocolName) {
   return dexOriginChains[dex];
 }
-export function getTokenDenomInfo(token: Token): DenomInfo {
+export function getTokenDenomInfo(token: Token, isSecret = false): DenomInfo {
   for (let otherChain of SUPPORTED_CHAINS) {
     const otherChainInfo = getChainInfo(otherChain);
     let curr = otherChainInfo.currencies.find(d => {
-      return token === d.coinDenom;
+      return token === d.coinDenom.replace('-',''); // stkd-SCRT > stkdSCRT
     });
     if (curr) {
       return {
-        token: curr.coinDenom as Token,
+        isSecret,
+        token,
         chainDenom: curr.coinMinimalDenom as Denom,
         chainId: otherChainInfo.chainId,
         decimals: curr.coinDecimals,

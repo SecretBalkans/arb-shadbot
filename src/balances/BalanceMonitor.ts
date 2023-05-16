@@ -1,4 +1,4 @@
-import {CHAIN, getChainInfo} from '../ibc';
+import {CHAIN, getChainByChainId, getChainInfo} from '../ibc';
 import {Observable} from 'rxjs';
 import {filter, map} from 'rxjs/operators';
 import cosmosObserver from '../wallet/CosmosObserver';
@@ -49,12 +49,15 @@ export function subscribeBalances(arb: ArbWallet): Observable<BalanceUpdate> {
       const chainInfo = getChainInfo(chain);
       cosmosObserver(chainInfo.rpc, 500).subscribe(() => {
         arb.getBalancesOnChain(chain).then(balances => {
+          if(!balances) { // sometimes we miss balance check - i.e. when fetching Secret balances.
+            return;
+          }
           obs.next(new BalanceUpdate({
             chain,
             balances,
             diff: balances.diff(),
           }));
-        }).catch(err => logger.error(err.message, chainInfo.rpc));
+        }).catch(err => logger.error(err.message, chain === CHAIN.Secret ? chainInfo.rest : chainInfo.rpc));
       }, err => obs.error(err));
     });
   }).pipe(filter((newBlockBalanceMap: BalanceUpdate) => {
@@ -117,7 +120,13 @@ export class BalanceMonitor implements CanLog {
       this.events.on('balance', (balanceUpdate: SerializedBalanceUpdate) => {
         let balanceObject = {
           balances: _(balanceUpdate.balances).toPairs().map(([key, val]) => {
-            return [SwapTokenMap[key], convertCoinFromUDenomV2(val.amount, val.denomInfo.decimals).toFixed(val.denomInfo.decimals)];
+            let amount = convertCoinFromUDenomV2(val.amount, val.denomInfo.decimals).toFixed(val.denomInfo.decimals);
+            let token = SwapTokenMap[key];
+            if (val.denomInfo.isSecret && (token === SwapToken.SCRT || getChainByChainId(val.denomInfo.chainId) !== CHAIN.Secret)) {
+              return [`s${token}`, amount];
+            } else {
+              return [token, amount];
+            }
           }).fromPairs().value(),
           bot_id: this.BOT_ID,
           chain_id: balanceUpdate.chain
@@ -130,7 +139,14 @@ export class BalanceMonitor implements CanLog {
             }
         `, {
           object: balanceObject
-        }).catch(err => this.logger.error('GQL', err))
+        }).catch(err => {
+          let message = err.message;
+          try {
+            message = JSON.parse(err.message.replace('Fetch error: ', '')).message;
+          } catch {
+          }
+          this.logger.debugOnce('GQL', message);
+        })
       })
     }
   }
@@ -144,7 +160,8 @@ export class BalanceMonitor implements CanLog {
     if (isBalanceCheck) {
       return existingBalance;
     }
-
+    // TODO: for secret send a message to Monitor to keep looking
+    //  only for a single token to avoid waiting too long and wait for that message
     return Promise.race([
       new Promise<false>(resolve => setTimeout(() => resolve(false), maxWaitTime)),
       new Promise<Amount>(resolve => {

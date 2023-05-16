@@ -8,7 +8,7 @@ import { makeIBCMinimalDenom } from '../utils/denoms';
 const logger = new Logger('Tokens');
 
 const osmoIbcDenomsAndRawToCoinInfo: Record<Denom, { chainId: string, token: Token | NonArbedToken }> = {};
-export type DenomInfo = { chainId: string, chainDenom: Denom, decimals: number, token: Token | NonArbedToken };
+export type DenomInfo = { chainId: string, chainDenom: Denom, decimals: number, token: Token | NonArbedToken, isSecret?: boolean };
 export type BaseDenomInfo = { chainId: string, baseDenom: Denom, decimals: number };
 const tokenToBaseDenomInfo: Record<Token | NonArbedToken, BaseDenomInfo> = {};
 

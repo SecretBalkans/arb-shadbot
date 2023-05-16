@@ -51,20 +51,21 @@ export default class MoveIBC implements CanLog {
       // Move Native asset from/to it's chain
       this.logger.log(`Try move max ${amount.toString()} ${token} from ${fromChain} to ${toChain} directly.`.blue);
 
-      return [new BridgeOperation({
-        from: fromChain,
-        to: toChain,
-        token,
-        amount: new BalanceCheckOperation({
-          chain: fromChain,
+      return [
+        new BridgeOperation({
+          from: fromChain,
+          to: toChain,
           token,
-          amountMax: amount,
-          amountMin
-        }),
-      }), new BalanceWaitOperation({
-        chain: toChain,
-        token,
-      })];
+          amount: new BalanceCheckOperation({
+            chain: fromChain,
+            token,
+            amountMax: amount,
+            amountMin
+          }),
+        }), new BalanceWaitOperation({
+          chain: toChain,
+          token,
+        })];
     } else {
       this.logger.log(`Try move max ${amount.toString()} ${token} from ${fromChain} to ${toChain} through ${assetNativeChain}`.blue);
       const initialMove = new BridgeOperation({
@@ -78,18 +79,20 @@ export default class MoveIBC implements CanLog {
           amountMin
         }),
       });
-      return [initialMove, new BalanceWaitOperation({
-        chain: assetNativeChain,
-        token,
-      }), new BridgeOperation({
-        from: assetNativeChain,
-        to: toChain,
-        amount: initialMove,
-        token,
-      }), new BalanceWaitOperation({
-        token,
-        chain: toChain,
-      })];
+      return [
+        initialMove,
+        new BalanceWaitOperation({
+          chain: assetNativeChain,
+          token,
+        }), new BridgeOperation({
+          from: assetNativeChain,
+          to: toChain,
+          amount: initialMove,
+          token,
+        }), new BalanceWaitOperation({
+          token,
+          chain: toChain,
+        })];
     }
   }
 

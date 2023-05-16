@@ -5,7 +5,7 @@ import { safeJsonStringify } from './safe-json-stringify';
 export function httpsAgent(maxSockets = 15) {
   return new https.Agent({
     keepAlive: true,
-    keepAliveMsecs: 1000,
+    keepAliveMsecs: 10000,
     maxSockets: maxSockets,
   });
 }
@@ -14,7 +14,7 @@ export function httpsAgent(maxSockets = 15) {
 export function httpAgent(maxSockets = 15) {
   return new https.Agent({
     keepAlive: true,
-    keepAliveMsecs: 1000,
+    keepAliveMsecs: 10000,
     maxSockets: maxSockets,
   });
 }

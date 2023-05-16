@@ -24,14 +24,10 @@ export enum SwapToken {
   stOSMO = 'stOSMO',
   stINJ = 'stINJ',
   INJ = 'INJ',
-  stLUNA = 'stLUNA',
-  LUNA = 'LUNA',
   OSMO = 'OSMO',
   JUNO = 'JUNO',
   stJUNO = 'stJUNO',
-  JKL = 'JKL',
   BLD = 'BLD',
-  SIENNA = 'SIENNA'
 }
 
 // noinspection JSUnusedLocalSymbols
@@ -54,11 +50,7 @@ export const SwapTokenMap: Record<SwapToken, Token> = {
   OSMO: SwapToken.OSMO as Token,
   JUNO: SwapToken.JUNO as Token,
   stJUNO: SwapToken.stJUNO as Token,
-  SIENNA: SwapToken.SIENNA as Token,
-  JKL: SwapToken.JKL as Token,
   BLD: SwapToken.BLD as Token,
   INJ: SwapToken.INJ as Token,
-  stINJ: SwapToken.stINJ as Token,
-  LUNA: SwapToken.LUNA as Token,
-  stLUNA: SwapToken.stLUNA as Token,
+  stINJ: SwapToken.stINJ as Token
 };
