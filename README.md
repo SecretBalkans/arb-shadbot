@@ -74,7 +74,7 @@ To easiest way is to use the provided template of `.secrets.js.example`.
 # How to run?
 1. Run dockerized hasura + postgres
 2. Start the dashboard
-3. Start the arb monitor
+3. (Optional) Start the arb monitor, if you want to connect locally to it you would have to change the monitor hasura url of bot and dashboard
 4. Start the bot via `test-bot.ts`. Check out the code to see what it does and run it.
 
 Description on how to run each can be found it the appropriate repo.
