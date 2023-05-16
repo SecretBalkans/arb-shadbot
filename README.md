@@ -8,11 +8,12 @@ ShadBot provides the tools to monitor and operate alpha earning strategies on to
 For the hackSecret we build the initial version of the product (Phase 1). The goal is to create a community of power users (people who know how to utilize different financial products on the blockchain). Power users can run the bot locally and use their own funds to trade and make profits.
 Arbitrage opportunities that ShadBot supports are:
 - Dex arbitrage
-- Liquidation arbitrage
+- Liquidation arbitrage (tbd)
 - Staking derivative arbitrage (tbd)
 
 ## Problem
-“Shade protocol enables alpha bringing strategies, but it lacks the proper tools to monitor and execute them.”
+“Shade protocol enables alpha bringing strategies, but it lacks the proper tools to monitor and execute them.” <br/>
+More on this in the [pitch deck](https://www.canva.com/design/DAFizPIwA98/jj4Z42WymYcH_-xhEuLG5Q/view?utm_content=DAFizPIwA98&utm_campaign=designshare&utm_medium=link&utm_source=publishsharelink)
 
 ## Solution
 ShadBot brings the infrastructure for monitoring and execution of different strategies. The final version will implement smart contract vaults which allow permissionless hedge funding. The governance model will also be introduced, which will provide more robustness and trust in the protocol.
@@ -42,5 +43,13 @@ The code can be found [here](https://github.com/SecretBalkans/tokentransfer)
 We build mostly everything in typescript. We utilized libraries from Cosmos foundation for the chain interaction. Blockchain of interest is the Secret Network. For the hackathon and the first version of the protocol we built around Shade protocol. We also used docker to containerize software.
 
 ## Resources
-- Demo video: 
+- [Demo video](https://youtu.be/mL3C7FiJki4) 
 - [Pitch deck](https://www.canva.com/design/DAFizPIwA98/jj4Z42WymYcH_-xhEuLG5Q/view?utm_content=DAFizPIwA98&utm_campaign=designshare&utm_medium=link&utm_source=publishsharelink)
+
+## How to run?
+1. Run dockerized hasura + postgres
+2. Start the dashboard
+3. Start the arb monitor
+4. Start the bot
+
+Description on how to run each can be found it the appropriate repo.
