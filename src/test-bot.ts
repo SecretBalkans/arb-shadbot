@@ -171,7 +171,7 @@ const bot0Wallet = new ArbWallet({
         ipc.of[monitorId].on(
           'arbs',
           function(data: ArbV1Raw[]) {
-            executor.updateArbs(data.map(parseRawArbV1));
+           executor.updateArbs(data.map(parseRawArbV1));
           });
       },
     );
