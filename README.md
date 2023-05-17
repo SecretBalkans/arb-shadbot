@@ -20,7 +20,8 @@ ShadBot brings the infrastructure for monitoring and execution of different stra
 
 ## Architecture
 
-> Go to bottom of this README for installation instructions
+> Scroll down for installation instructions
+> Go to the end for developer deepdive about architecture and implementation
 
 ### Arb Monitor
 Its goal is to observe the blockchain and capture different arbitrage opportunities. <br/>
@@ -78,3 +79,20 @@ To easiest way is to use the provided template of `.secrets.js.example`.
 4. Start the bot via `test-bot.ts`. Check out the code to see what it does and run it.
 
 Description on how to run each can be found it the appropriate repo.
+
+
+# Architecture overview (developer deepdive)
+1. We use TS in 99% of places to ensure typesafety in Bot operations
+2. There are 4 parts to the bot's workings
+  1.  The Balances Monitor (src/balances/BalanceMonitor.ts)
+  2.  The arbs subscriptions to the Monitor  (src/monitorGqlClient.ts)
+  3.  The building of an arb plan 
+  4.  The actual execution of the plan
+
+There are 2 node.js processes that do sepparate tasks and comunicate through ipc.
+1. Main process (master thread) is continuously watching the balances of the arb wallet and is ensuring that the bot process is alive
+2. The bot process (respawned upon error) subscribes to the balances from the main process and subscribes to the arb fed to him from the monitor gql api
+3. Upon finding a winning arb (including bridges + swaps gas cost) it will build an arb plan (a sequence of Bridge/Swap operations) and will match it to the balances it is holding
+4. If it has the tokens to complete an arb it will attempt to execute the necessary Bridge and Swaps
+5. If it fails it will mark the arb path (dex/tokens combination) for review - the bot operator (aka power user) might be able to remedy the failure (fixing bugs, providing token liquidity, etc.)
+6. (TBD) Eventually the bot will report to the dashboard about it's runs and will print any logs and failures so they can be reviewed by the bot operator.
