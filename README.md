@@ -95,4 +95,4 @@ There are 2 node.js processes that do sepparate tasks and comunicate through ipc
 3. Upon finding a winning arb (including bridges + swaps gas cost) it will build an arb plan (a sequence of Bridge/Swap operations) and will match it to the balances it is holding
 4. If it has the tokens to complete an arb it will attempt to execute the necessary Bridge and Swaps
 5. If it fails it will mark the arb path (dex/tokens combination) for review - the bot operator (aka power user) might be able to remedy the failure (fixing bugs, providing token liquidity, etc.)
-6. (TBD) Eventually the bot will report to the dashboard about it's runs and will print any logs and failures so they can be reviewed by the bot operator.
+6. (TBD) Eventually the bot will report to the dashboard about it's runs and will print any logs and failures so they can be reviewed by the bot operator and a PNL graph can be charted
