@@ -5,7 +5,7 @@ import {
 } from './types';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
-import {SwapTokenMap} from '../ibc/dexTypes';
+import {SwapTokenMap} from '../ibc';
 import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from './MoveIBC';
 import {ArbOperation} from './aArbOperation';
 
@@ -17,6 +17,7 @@ export class BalanceWaitOperation extends ArbOperation<BalanceWaitOperationType>
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean; result: IArbOperationExecuteResult<BalanceWaitOperationType> }> {
     const t = Date.now();
     const amountOrFalse = await balanceMonitor.waitForChainBalanceUpdate(this.data.chain, this.data.token, {
+      isWrapped: this.data.isWrapped,
       maxWaitTime: MAX_IBC_FINISH_WAIT_TIME_DEFAULT
     })
     return amountOrFalse ? {

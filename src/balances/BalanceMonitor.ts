@@ -2,7 +2,7 @@ import {CHAIN, getChainByChainId, getChainInfo} from '../ibc';
 import {Observable} from 'rxjs';
 import {filter, map} from 'rxjs/operators';
 import cosmosObserver from '../wallet/CosmosObserver';
-import {ArbWallet, BalanceMap, SerializedBalanceMap} from '../wallet/ArbWallet';
+import {ArbWallet, BalanceMap, SerializedBalanceMap, TokenBalanceWithDenomInfo} from '../wallet/ArbWallet';
 import _ from 'lodash';
 import {Logger} from '../utils';
 import {Amount, SwapToken, SwapTokenMap, Token} from '../ibc/dexTypes';
@@ -94,8 +94,8 @@ export class BalanceMonitor implements CanLog {
 
   public readonly events = new EventEmitter();
 
-  public getTokenAmount(chain: CHAIN, token: Token): Amount {
-    return this.balances[chain]?.tokenBalances[token]?.amount || BigNumber(0);
+  public getTokenAmount(chain: CHAIN, token: Token, isWrapped: boolean): Amount {
+    return (_.find(this.balances[chain]?.tokenBalances, { token, denomInfo: {isWrapped} }) as TokenBalanceWithDenomInfo)?.amount || BigNumber(0);
   }
 
   public getFullTokenBalanceInfo(chain: CHAIN, token: Token): { amount: BigNumber, denomInfo: DenomInfo } {
@@ -122,7 +122,7 @@ export class BalanceMonitor implements CanLog {
           balances: _(balanceUpdate.balances).toPairs().map(([key, val]) => {
             let amount = convertCoinFromUDenomV2(val.amount, val.denomInfo.decimals).toFixed(val.denomInfo.decimals);
             let token = SwapTokenMap[key];
-            if (val.denomInfo.isSecret && (token === SwapToken.SCRT || getChainByChainId(val.denomInfo.chainId) !== CHAIN.Secret)) {
+            if (val.denomInfo.isWrapped && (token === SwapToken.SCRT || getChainByChainId(val.denomInfo.chainId) !== CHAIN.Secret)) {
               return [`s${token}`, amount];
             } else {
               return [token, amount];
@@ -153,10 +153,11 @@ export class BalanceMonitor implements CanLog {
 
   public async waitForChainBalanceUpdate(chain: CHAIN, token: SwapToken, {
     maxWaitTime = MAX_IBC_FINISH_WAIT_TIME_DEFAULT,
-    isBalanceCheck = false
+    isWrapped = false,
+    isBalanceCheck = false,
   } = {}): Promise<Amount | false> {
     const swapToken = SwapTokenMap[token];
-    const existingBalance = this.getTokenAmount(chain, SwapTokenMap[token]);
+    const existingBalance = this.getTokenAmount(chain, SwapTokenMap[token], isWrapped);
     if (isBalanceCheck) {
       return existingBalance;
     }

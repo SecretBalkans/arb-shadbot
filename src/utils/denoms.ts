@@ -2,6 +2,8 @@
 import BigNumber from 'bignumber.js';
 import { Buffer } from 'buffer';
 import { sha256 } from '@cosmjs/crypto';
+import {IBCHash} from "../ibc";
+
 
 export const convertCoinToUDenomV2 = (input: string | number | BigNumber, decimals: number): BigNumber => {
   return typeof input == 'string' || typeof input == 'number' ?
@@ -13,10 +15,11 @@ export const convertCoinFromUDenomV2 = (input: string | BigNumber,decimals:numbe
   DECIMAL_PLACES: 18
 }),BigNumber(input.toString()).dividedBy(BigNumber(10).pow(decimals)))
 
+
 export function makeIBCMinimalDenom(
   sourceChannelId: string,
   coinMinimalDenom: string
-): string {
+): IBCHash {
   return (
     "ibc/" +
     Buffer.from(
@@ -25,6 +28,6 @@ export function makeIBCMinimalDenom(
         )
       )
       .toString("hex")
-      .toUpperCase()
+      .toUpperCase() as IBCHash
   );
 }

@@ -9,16 +9,15 @@ import {
 import {Logger} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import BigNumber from 'bignumber.js';
-import {CHAIN, getChainByChainId} from '../ibc';
+import {getChainByChainId, getTokenDenomInfo, SwapTokenMap} from '../ibc';
 import {convertCoinToUDenomV2, makeIBCMinimalDenom} from '../utils/denoms';
 import {StdFee} from '@cosmjs/stargate';
 import {MsgTransfer} from 'cosmjs-types/ibc/applications/transfer/v1/tx';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
-import {ArbOperation} from './aArbOperation';
 import {getGasFeeInfo} from "./utils";
-import {BalanceCheckOperation} from "./BalanceCheckOperation";
-import {Amount, SwapTokenMap} from "../ibc/dexTypes";
-import {getTokenBaseDenomInfo} from "../ibc/tokens";
+import {Amount} from "../ibc";
+import {ArbOperationSequenced} from "./aArbOperation";
+import MoveIBC from "./MoveIBC";
 
 function getTimeoutTimestamp() {
   const timeoutInMinutes = 15;
@@ -33,7 +32,8 @@ function getTimeoutTimestamp() {
 }
 
 
-export class BridgeOperation extends ArbOperation<BridgeOperationType> {
+
+export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> {
   type() {
     return 'Bridge';
   };
@@ -46,6 +46,7 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<BridgeOperationType> }> {
     const result = await this.transferIBC(this.data, arbWallet, balanceMonitor);
+
     return (result instanceof BigNumber) ? {
       success: true,
       result: {
@@ -63,22 +64,14 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
                               token,
                               from,
                             }: BridgeOperationData, arbWallet, balanceMonitor): Promise<Amount | IFailingArbInfo> {
-    let resolvedAmount, balanceCheck;
-    if (!(amount instanceof BigNumber)) {
-      balanceCheck = await amount.execute(arbWallet, balanceMonitor);
-      resolvedAmount = balanceCheck.success ? balanceCheck.result.amount : new BigNumber(balanceCheck.result.internal);
-    }
-    if ((balanceCheck && !balanceCheck?.result?.success) || resolvedAmount.isEqualTo(0)) {
-      let decimalPlaces = getTokenBaseDenomInfo(SwapTokenMap[token]).decimals;
-      const amountMin = !(amount instanceof BigNumber) && (amount as BalanceCheckOperation).data?.amountMin;
-      const msgRsn = amountMin ? `less than amountMin estimation ${amountMin.toFixed(decimalPlaces)} ${token}` : `balance is ${resolvedAmount.toFixed(decimalPlaces)} ${token}`;
-      const message = `Can't move ${resolvedAmount} ${token} from chain ${from} to ${to}. Reason: ${msgRsn}`;
-      const reason = amountMin ? FailReasons.MinAmount : FailReasons.NoBalance;
+    let resolvedAmount = await this.resolveArbOperationAmount({ amount: amount, token: token },  arbWallet, balanceMonitor);
+    if(!(resolvedAmount instanceof BigNumber)) {
+      const msgRsn = resolvedAmount.reason === FailReasons.MinAmount ? `less than amountMin estimation ${resolvedAmount.data} ${token}` : resolvedAmount.reason === FailReasons.NoBalance ? `balance is ${resolvedAmount.data} ${token}` : `${resolvedAmount.reason}`;
+      const message = `Can't move ${resolvedAmount.data} ${token} from chain ${from} to ${to}. Reason: ${msgRsn}`;
+
       return {
-        reason,
-        message,
-        internal: resolvedAmount,
-        data: amountMin.toFixed(decimalPlaces)
+        ...resolvedAmount,
+        message
       };
     }
     if (from === to) {
@@ -92,9 +85,8 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
     const {
       chainId: originChainId,
       decimals: sentTokenDecimals,
-      chainDenom,
-      isSecret,
-    } = balanceMonitor.balances[from].tokenBalances[token].denomInfo;
+      chainDenom
+    } = getTokenDenomInfo(SwapTokenMap[token]);
 
     const sourceChannel = arbWallet.getTransferChannelId(from, to);
     if (!sourceChannel) {
@@ -200,6 +192,8 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
           // Validate that there is the amount meaning we have good tx
           // tslint:disable-next-line:no-unused-expression
           JSON.parse(JSON.parse(txnStatus.rawLog)[0].events.find(({type}) => type === 'send_packet').attributes.find(({key}) => key === 'packet_data').value).amount;
+        } else {
+          throw new Error('Wrong channel')
         }
       } catch (err) {
         this.logger.error('Transfer error'.red, txnStatus.rawLog);

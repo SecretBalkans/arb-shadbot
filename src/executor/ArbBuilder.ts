@@ -19,7 +19,10 @@ export default class ArbBuilder {
   logger: Logger;
   ARB_THRESHOLD: number = 0.1;
   deferredArbs: Record<string, ArbV1> = {};
-  failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {};
+  failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {
+    // TODO: DISABLE AXELAR USDC ARB for demo
+    [`osmosis-shade_SCRT-USDC`]: true
+  };
   isWaitingForArb: boolean;
 
   constructor(public readonly arbWallet: ArbWallet, private readonly balanceMonitor: BalanceMonitor) {

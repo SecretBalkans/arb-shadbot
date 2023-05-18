@@ -4,6 +4,7 @@ import BigNumber from 'bignumber.js';
 export type Amount = BigNumber;
 export type CoinAmount = BigNumber;
 export type DexProtocolName = 'osmosis' | 'shade';
+export type IBCHash = Brand<string, 'IBCHash'>;
 
 export type Token = Brand<string, 'Token'>;
 export type Denom = Brand<string, 'Denom'>;

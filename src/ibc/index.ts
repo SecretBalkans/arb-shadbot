@@ -7,6 +7,7 @@ import { DenomInfo } from './tokens';
 
 const logger = new Logger('IbcInfo');
 
+export * from './dexTypes';
 export * from './osmosis-registry/chainInfos';
 export * from './osmosis-registry/ibcAssets';
 
@@ -55,7 +56,7 @@ const dexOriginChains: Record<DexProtocolName, CHAIN> = { osmosis: CHAIN.Osmosis
 export function getDexOriginChain(dex: DexProtocolName) {
   return dexOriginChains[dex];
 }
-export function getTokenDenomInfo(token: Token, isSecret = false): DenomInfo {
+export function getTokenDenomInfo(token: Token, isWrapped = false): DenomInfo {
   for (let otherChain of SUPPORTED_CHAINS) {
     const otherChainInfo = getChainInfo(otherChain);
     let curr = otherChainInfo.currencies.find(d => {
@@ -63,7 +64,7 @@ export function getTokenDenomInfo(token: Token, isSecret = false): DenomInfo {
     });
     if (curr) {
       return {
-        isSecret,
+        isWrapped,
         token,
         chainDenom: curr.coinMinimalDenom as Denom,
         chainId: otherChainInfo.chainId,

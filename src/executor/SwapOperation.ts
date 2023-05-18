@@ -1,16 +1,23 @@
-import {BalanceCheckOperationResult, IArbOperationExecuteResult, IOperationData, SwapOperationType} from './types';
-import { fetchTimeout, Logger } from '../utils';
-import { Amount, SwapTokenMap, Token } from '../ibc/dexTypes';
-import { ArbWallet, getChainUrl, swapTypeUrlOsmo } from '../wallet/ArbWallet';
-import { getTokenBaseDenomInfo } from '../ibc/tokens';
-import { convertCoinToUDenomV2 } from '../utils/denoms';
-import { CHAIN } from '../ibc';
+import {
+  AmountOperationResult,
+  BalanceCheckOperationResult,
+  FailReasons,
+  IArbOperationExecuteResult,
+  IOperationData,
+  SwapOperationType
+} from './types';
+import {fetchTimeout, Logger} from '../utils';
+import {Amount, SwapTokenMap, Token} from '../ibc';
+import {ArbWallet, getChainUrl, swapTypeUrlOsmo} from '../wallet/ArbWallet';
+import {getTokenBaseDenomInfo} from '../ibc/tokens';
+import {convertCoinToUDenomV2} from '../utils/denoms';
+import {CHAIN, getTokenDenomInfo} from '../ibc';
 import BigNumber from 'bignumber.js';
 import _ from 'lodash';
-import { getGasFeeInfo } from './utils';
+import {getGasFeeInfo} from './utils';
 import Aigle from 'aigle';
-import { toBase64 } from '@cosmjs/encoding';
-import { ArbOperation } from './aArbOperation';
+import {toBase64} from '@cosmjs/encoding';
+import { ArbOperationSequenced} from './aArbOperation';
 import {BalanceMonitor} from "../balances/BalanceMonitor";
 
 function getLog({ rawLog }: { rawLog: string }) {
@@ -20,7 +27,7 @@ function getLog({ rawLog }: { rawLog: string }) {
     throw new Error(rawLog);
   }
 }
-export class SwapOperation extends ArbOperation<SwapOperationType> {
+export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
 
   logger: Logger;
 
@@ -43,17 +50,21 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
   }
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<SwapOperationType> }> {
-    const amount = await this.data.token0Amount.execute(arbWallet, balanceMonitor);
-    if(!amount.success) {
-      this.logger.log('Swap PANIC amount'.red);
+    const amount = await this.resolveArbOperationAmount({amount: this.data.tokenAmountIn, token: this.data.swapTokenSent}, arbWallet, balanceMonitor);
+    if(!(amount instanceof BigNumber)) {
+      return {
+        success: false,
+        result: amount
+      }
     }
     const tokenDenomInfo = getTokenBaseDenomInfo(this.token0);
     const receivedDenomInfo = getTokenBaseDenomInfo(this.token1);
     const slippage = 0.02;
-    let minReceivingAmountString = convertCoinToUDenomV2(this.data.expectedReturn.multipliedBy(1 - slippage), receivedDenomInfo.decimals).toString();
+    let minReceivingAmountString = '1000' || convertCoinToUDenomV2(this.data.expectedReturn.multipliedBy(1 - slippage) || BigNumber(0.001), receivedDenomInfo.decimals).toFixed(0);
     let sentDenom = tokenDenomInfo.baseDenom, receivedDenom;
-    let sentAmountString = convertCoinToUDenomV2((amount.result as BalanceCheckOperationResult).amount, tokenDenomInfo.decimals).toString().split('.')[0];
-    this.logger.log(`Swap ${amount} (${sentAmountString}) ${this.token0} > ${this.token1} in ${this.data.dex}`);
+    let bigNumberAmountResult = amount;
+    let sentAmountString = convertCoinToUDenomV2(bigNumberAmountResult, tokenDenomInfo.decimals).toString().split('.')[0];
+    this.logger.log(`Swap ${bigNumberAmountResult.toNumber()} (${sentAmountString}) ${this.token0} > ${this.token1} in ${this.data.dex}`);
     switch (this.data.dex) {
       case 'osmosis':
         const chainOsmosis = CHAIN.Osmosis;
@@ -80,8 +91,8 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
             'routes': await Aigle.map(this.data.route as string[], async (poolId, i) => {
               let tokenOutDenom;
               if (i === 0) {
-                let data = await fetchTimeout(`https://${getChainUrl(chainOsmosis)}/osmosis/gamm/v1beta1/pools/${poolId}`);
-                let { pool: { pool_assets: [{ token: { denom: denom1 } }, { token: { denom: denom2 } }] } } = data;
+                let data = await fetchTimeout(`${getChainUrl(chainOsmosis, true)}/osmosis/gamm/v1beta1/pools/${poolId}`);
+                let { pool: { pool_liquidity: [{ denom: denom1 } , { denom: denom2 }] } } = data;
                 tokenOutDenom = sentDenom === denom1 ? denom2 : denom1;
               } else {
                 tokenOutDenom = receivedDenom;
@@ -95,6 +106,7 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
               'denom': sentDenom,
               'amount': sentAmountString,
             },
+            //TODO: export calculate code from arbjs to get minReceivingAmountString
             'tokenOutMinAmount': minReceivingAmountString,
           },
         }];
@@ -114,7 +126,7 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
           return {
             success: true,
             result: {
-              token1ReturnAmount: amountReturned,
+              amount: amountReturned,
             },
           };
         } catch (err) {
@@ -148,7 +160,8 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
       case 'shade':
         const routerHash = '448e3f6d801e453e838b7a5fbaa4dd93b84d0f1011245f0d5745366dadaf3e85';
         const routerAddress = 'secret1pjhdug87nxzv0esxasmeyfsucaj98pw4334wyc';
-        const tokenAddress = this.data.route[0].t0.symbol === this.token0 ? this.data.route[0].t0.contract_address : this.data.route[0].t1.contract_address;
+        // TODO: fix the route to give swap token symbols and not sSCRT or other prefixed
+        const tokenAddress = _.trimStart(this.data.route[0].t0.symbol, 's') === this.token0 ? this.data.route[0].t0.contract_address : this.data.route[0].t1.contract_address;
         // noinspection JSUnusedLocalSymbols
         const apContractPath = await Aigle.map(this.data.route, async ({ lp, t0, t1 }) => {
           return lp;
@@ -156,29 +169,45 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
         const raw_msg = JSON.stringify(
           {
             swap_tokens_for_exact: {
-              expected_return: minReceivingAmountString,
+              expected_return: '1000' ||minReceivingAmountString,
               path: apContractPath.map(d => ({ addr: d.address, code_hash: d.codeHash })),
             },
           },
         );
         const tx = await arbWallet.executeSecretContract(
-          tokenAddress,
           {
-            send: {
-              'recipient': routerAddress,
-              'recipient_code_hash': routerHash,
-              'amount': sentAmountString,
-              'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
-              'padding': 'u3a9nScQ',
-            },
-          },
-          0.025, // sometimes fails depending on node used
-          2_530_000, // TODO: see shade UI gas fee calculation based on hops
+            contractAddress: tokenAddress, msg: {
+              send: {
+                'recipient': routerAddress,
+                'recipient_code_hash': routerHash,
+                'amount': sentAmountString,
+                'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
+                'padding': 'u3a9nScQ',
+              },
+            }, gasPrice: 0.125, gasLimit: 3_530_000
+          }, // TODO: see shade UI gas fee calculation based on hops
         );
-        this.logger.log(tx.rawLog);
-        break;
+        try {
+          let findLast = _.findLast(tx.arrayLog, {key: "amount_out"});
+          let token1ReturnAmount = convertCoinToUDenomV2(findLast.value, getTokenDenomInfo(this.token1).decimals);
+          return {
+            success: true,
+            result: {
+              data: tx.rawLog,
+              amount: token1ReturnAmount
+            }
+          }
+        } catch(err) {
+          return {
+            success: false,
+            result: {
+              data: tx.rawLog,
+              reason: FailReasons.Unhandled
+            }
+          }
+        }
       default:
-        this.logger.log();
+        this.logger.log('Unknown dex');
         return;
     }
   }

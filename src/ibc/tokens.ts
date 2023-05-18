@@ -8,7 +8,7 @@ import { makeIBCMinimalDenom } from '../utils/denoms';
 const logger = new Logger('Tokens');
 
 const osmoIbcDenomsAndRawToCoinInfo: Record<Denom, { chainId: string, token: Token | NonArbedToken }> = {};
-export type DenomInfo = { chainId: string, chainDenom: Denom, decimals: number, token: Token | NonArbedToken, isSecret?: boolean };
+export type DenomInfo = { chainId: string, chainDenom: Denom, decimals: number, token: Token | NonArbedToken, isWrapped?: boolean };
 export type BaseDenomInfo = { chainId: string, baseDenom: Denom, decimals: number };
 const tokenToBaseDenomInfo: Record<Token | NonArbedToken, BaseDenomInfo> = {};
 
@@ -18,11 +18,12 @@ ChainInfos.forEach(chInfo => {
     if (parsedCoinDenom === 'OSMO') {
       tokenToBaseDenomInfo[SwapToken.OSMO] = {
         chainId: chInfo.chainId,
-        decimals: curr.coinDecimals
+        decimals: curr.coinDecimals,
+        baseDenom: curr.coinMinimalDenom,
       }
       osmoIbcDenomsAndRawToCoinInfo[curr.coinMinimalDenom] = {
         chainId: chInfo.chainId,
-        token: SwapToken.OSMO,
+        token: SwapToken.OSMO
       };
       return;
     }
@@ -34,7 +35,8 @@ ChainInfos.forEach(chInfo => {
     if (!osmoIbcInfo) {
       tokenToBaseDenomInfo[curr.coinDenom as NoIBCToken] = {
         chainId: chInfo.chainId,
-        decimals: curr.coinDecimals
+        decimals: curr.coinDecimals,
+        baseDenom: curr.coinMinimalDenom,
       }
       osmoIbcDenomsAndRawToCoinInfo[curr.coinMinimalDenom] = {
         chainId: chInfo.chainId,
@@ -60,7 +62,6 @@ ChainInfos.forEach(chInfo => {
       return osmoIbcDenomsAndRawToCoinInfo[osmoIbcMinimalDenom] = {
         chainId: chInfo.chainId,
         token: curr.coinMinimalDenom as NonArbedToken,
-        denom: curr,
       };
     } else {
       const swapTokenParsed: Token = SwapTokenMap[swapToken];
