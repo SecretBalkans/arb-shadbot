@@ -40,7 +40,7 @@ export interface IFailingArbInfo {
 
 export type SwapOperationData = {
   swapTokenSent: SwapToken,
-  token0Amount: Amount,
+  token0Amount: ArbOperation<MoveOperationType>,
   expectedReturn: Amount,
   swapTokenReceived: SwapToken,
   dex: DexProtocolName,

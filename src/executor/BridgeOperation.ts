@@ -9,7 +9,7 @@ import {
 import {Logger} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import BigNumber from 'bignumber.js';
-import {getChainByChainId} from '../ibc';
+import {CHAIN, getChainByChainId} from '../ibc';
 import {convertCoinToUDenomV2, makeIBCMinimalDenom} from '../utils/denoms';
 import {StdFee} from '@cosmjs/stargate';
 import {MsgTransfer} from 'cosmjs-types/ibc/applications/transfer/v1/tx';
@@ -46,7 +46,7 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<BridgeOperationType> }> {
     const result = await this.transferIBC(this.data, arbWallet, balanceMonitor);
-    return (result instanceof BigNumber)  ? {
+    return (result instanceof BigNumber) ? {
       success: true,
       result: {
         amount: result,
@@ -93,14 +93,15 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
       chainId: originChainId,
       decimals: sentTokenDecimals,
       chainDenom,
+      isSecret,
     } = balanceMonitor.balances[from].tokenBalances[token].denomInfo;
 
     const sourceChannel = arbWallet.getTransferChannelId(from, to);
     if (!sourceChannel) {
-      this.logger.log(`Transfer error non-existing channel ${JSON.stringify({ from, to })}`.red);
+      this.logger.log(`Transfer error non-existing channel ${JSON.stringify({from, to})}`.red);
       return {
         reason: FailReasons.IBC,
-        data: `Transfer error non-existing channel ${JSON.stringify({ from, to })}`
+        data: `Transfer error non-existing channel ${JSON.stringify({from, to})}`
       };
     }
     let sentTokenDenom;
@@ -111,6 +112,16 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
     }
     this.logger.log(`Will transfer ${resolvedAmount} ${token} from (${from}/${sender}) to (${to}/${receiver}) (${sourceChannel})`);
 
+    /*if (from === CHAIN.Secret && sentTokenDenom) {
+      let info = arbWallet.getSecretAddress(token);
+      await arbWallet.executeSecretContract(info.address, {
+        "redeem": {
+          "amount": amount,
+          "denom": sentTokenDenom
+        }
+      }, 0.015, 130000)
+    }
+*/
     let unsignedTransferMsg, fee: StdFee;
 // if (sentTokenDenom.startsWith('cw20')) {
 //   // noinspection SpellCheckingInspection
@@ -188,7 +199,7 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
         if (!txnStatus.rawLog.includes('denomination trace not found')) {
           // Validate that there is the amount meaning we have good tx
           // tslint:disable-next-line:no-unused-expression
-          JSON.parse(JSON.parse(txnStatus.rawLog)[0].events.find(({ type }) => type === 'send_packet').attributes.find(({ key }) => key === 'packet_data').value).amount;
+          JSON.parse(JSON.parse(txnStatus.rawLog)[0].events.find(({type}) => type === 'send_packet').attributes.find(({key}) => key === 'packet_data').value).amount;
         }
       } catch (err) {
         this.logger.error('Transfer error'.red, txnStatus.rawLog);
@@ -208,7 +219,9 @@ export class BridgeOperation extends ArbOperation<BridgeOperationType> {
     }
   }
 
-  id(): string {
+  id()
+    :
+    string {
     return `${this.data.from}-${this.data.to}`;
   }
 }

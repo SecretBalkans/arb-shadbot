@@ -57,7 +57,7 @@ export class ArbExecutor {
         expectedReturn: this.arb.amountBridge,
         route: this.arb.route0,
         swapTokenReceived: this.arb.token1,
-        token0Amount: this.arb.amountIn,
+        token0Amount: preparationPlan[preparationPlan.length - 1],
       }),
       new BridgeOperation({
         from: dexChain,
@@ -74,8 +74,8 @@ export class ArbExecutor {
         swapTokenSent: this.arb.token1,
         expectedReturn: this.arb.amountIn,
         route: this.arb.route0,
-        swapTokenReceived: this.arb.token1,
-        token0Amount: this.arb.amountIn,
+        swapTokenReceived: this.arb.token0,
+        token0Amount: preparationPlan[preparationPlan.length - 1],
       }),
     ];
   }

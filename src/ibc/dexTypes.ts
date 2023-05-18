@@ -11,7 +11,7 @@ export type NonArbedToken = Brand<string, 'NonArbedToken'>
 export type NoIBCToken = Brand<string, 'NoIBCToken'>
 export type PoolToken = Token | NonArbedToken | NoIBCToken;
 export enum SwapToken {
-  SHD = 'SHD',
+  // SHD = 'SHD',
   'USDC' = 'USDC',
   'USDT' = 'USDT',
   CMST = 'CMST',
@@ -36,7 +36,7 @@ export function isSwapToken(token: string): token is SwapToken {
 }
 
 export const SwapTokenMap: Record<SwapToken, Token> = {
-  SHD: SwapToken.SHD as Token,
+  // SHD: SwapToken.SHD as Token,
   SILK: SwapToken.SILK as Token,
   CMST: SwapToken.CMST as Token,
   stkdSCRT: SwapToken.stkdSCRT as Token,

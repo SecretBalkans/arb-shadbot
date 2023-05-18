@@ -1,4 +1,4 @@
-import {IArbOperationExecuteResult, IOperationData, SwapOperationType} from './types';
+import {BalanceCheckOperationResult, IArbOperationExecuteResult, IOperationData, SwapOperationType} from './types';
 import { fetchTimeout, Logger } from '../utils';
 import { Amount, SwapTokenMap, Token } from '../ibc/dexTypes';
 import { ArbWallet, getChainUrl, swapTypeUrlOsmo } from '../wallet/ArbWallet';
@@ -11,6 +11,7 @@ import { getGasFeeInfo } from './utils';
 import Aigle from 'aigle';
 import { toBase64 } from '@cosmjs/encoding';
 import { ArbOperation } from './aArbOperation';
+import {BalanceMonitor} from "../balances/BalanceMonitor";
 
 function getLog({ rawLog }: { rawLog: string }) {
   try {
@@ -41,14 +42,18 @@ export class SwapOperation extends ArbOperation<SwapOperationType> {
     return `${SwapTokenMap[this.data.swapTokenSent]}-${SwapTokenMap[this.data.swapTokenReceived]}`;
   }
 
-  override async executeInternal(arbWallet: ArbWallet): Promise<{ success: boolean, result: IArbOperationExecuteResult<SwapOperationType> }> {
+  override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<SwapOperationType> }> {
+    const amount = await this.data.token0Amount.execute(arbWallet, balanceMonitor);
+    if(!amount.success) {
+      this.logger.log('Swap PANIC amount'.red);
+    }
     const tokenDenomInfo = getTokenBaseDenomInfo(this.token0);
     const receivedDenomInfo = getTokenBaseDenomInfo(this.token1);
     const slippage = 0.02;
     let minReceivingAmountString = convertCoinToUDenomV2(this.data.expectedReturn.multipliedBy(1 - slippage), receivedDenomInfo.decimals).toString();
     let sentDenom = tokenDenomInfo.baseDenom, receivedDenom;
-    let sentAmountString = convertCoinToUDenomV2(this.data.token0Amount, tokenDenomInfo.decimals).toString().split('.')[0];
-    this.logger.log(`Swap ${this.data.token0Amount} (${sentAmountString}) ${this.token0} > ${this.token1} in ${this.data.dex}`);
+    let sentAmountString = convertCoinToUDenomV2((amount.result as BalanceCheckOperationResult).amount, tokenDenomInfo.decimals).toString().split('.')[0];
+    this.logger.log(`Swap ${amount} (${sentAmountString}) ${this.token0} > ${this.token1} in ${this.data.dex}`);
     switch (this.data.dex) {
       case 'osmosis':
         const chainOsmosis = CHAIN.Osmosis;

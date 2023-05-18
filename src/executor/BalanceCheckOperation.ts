@@ -23,7 +23,8 @@ export class BalanceCheckOperation extends ArbOperation<BalanceCheckOperationTyp
     const amount = await this.getMaxMoveAmountFromChain(balanceMonitor, {
       originChain: this.data.chain,
       asset: this.data.token,
-      amountMax: this.data.amountMax,
+      // TODO: remove this artificial amountMax
+      amountMax: new BigNumber(10) || this.data.amountMax,
     });
     return amount.isGreaterThan(this.data.amountMin) ? {
       success: true,

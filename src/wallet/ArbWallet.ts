@@ -430,7 +430,7 @@ export class ArbWallet {
     });
   }
 
-  private getSecretAddress(asset: SwapToken): { address: SecretContractAddress, codeHash: string, decimals: number } {
+  public getSecretAddress(asset: SwapToken): { address: SecretContractAddress, codeHash: string, decimals: number } {
     const shadeToken = getShadeTokenBySymbol(SwapTokenMap[asset]);
     return {
       address: shadeToken.contract_address,
