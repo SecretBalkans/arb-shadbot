@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import {ArbV1} from '../monitorGqlClient';
 import {CHAIN, getChainByChainId, getDexOriginChain, getTokenDenomInfo} from '../ibc';
-import {Amount, DexProtocolName, Token} from '../ibc/dexTypes';
+import {Amount, DexProtocolName, Token} from '../ibc';
 import {Prices} from '../prices/prices';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {Logger} from '../utils';
@@ -17,7 +17,7 @@ export default class ArbBuilder {
   private arbs: ArbV1[];
   prices: Prices;
   logger: Logger;
-  ARB_THRESHOLD: number = 0.1;
+  ARB_THRESHOLD: number = 0;
   deferredArbs: Record<string, ArbV1> = {};
   failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {
     // TODO: DISABLE AXELAR USDC ARB for demo
@@ -125,7 +125,8 @@ export default class ArbBuilder {
   private estimateBridgePrice(arb: ArbV1): number {
     const getChainBridgeCost = (chain: CHAIN) => {
       const {feeCurrency, amount} = getGasFeeInfo(chain);
-      return (amount as number) * this.getPrice(feeCurrency.coinDenom as Token);
+      // TODO: remove this hardcode of 0 bridge introduced while testing
+      return BigNumber(0) || (amount as number) * this.getPrice(feeCurrency.coinDenom as Token);
     };
 
     function getDexBridgeCost(dex: DexProtocolName) {

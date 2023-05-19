@@ -6,8 +6,9 @@ import {ArbRunLog} from "./ArbRunLog";
 import {ArbOperation} from "./aArbOperation";
 import {IFailingArbInfo, SwapMoveOperationsType} from "./types";
 import MoveIBC from "./MoveIBC";
-import {getDexOriginChain} from "../ibc";
+import {CHAIN, getDexOriginChain} from "../ibc";
 import {SwapOperation} from "./SwapOperation";
+import {BalanceWaitOperation} from "./BalanceWaitOperation";
 
 export class ArbExecutor {
   public failedReason: IFailingArbInfo;
@@ -80,6 +81,11 @@ export class ArbExecutor {
         expectedReturn: undefined, // TODO: provide calculation fn to be called with amount internally
         swapTokenReceived: this.arb.token0,
         tokenAmountIn: bridgePlan[bridgePlan.length - 1],
+      }),
+      new BalanceWaitOperation({
+        chain: dexChain1,
+        token: this.arb.token0,
+        isWrapped: dexChain1 === CHAIN.Secret,
       }),
     ];
   }

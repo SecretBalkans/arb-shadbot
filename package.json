@@ -15,6 +15,7 @@
     "@cosmjs/encoding": "^0.30.1",
     "@cosmjs/launchpad": "^0.27.1",
     "@cosmjs/stargate": "^0.30.1",
+    "@injectivelabs/sdk-ts": "^1.10.72",
     "@keplr-wallet/unit": "^0.10.24",
     "@osmosis-labs/math": "^4.0.0",
     "@osmosis-labs/stores": "^4.0.0",

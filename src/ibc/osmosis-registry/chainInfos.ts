@@ -133,7 +133,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.01,
+            low: 0.0021,
             average: 0.025,
             high: 0.03,
           },

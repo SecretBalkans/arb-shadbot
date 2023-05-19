@@ -54,7 +54,7 @@ export function subscribeBalances(arb: ArbWallet): Observable<BalanceUpdate> {
           obs.next(new BalanceUpdate({
             chain,
             balances,
-            diff: balances.diff(),
+            diff: balances,
           }));
         }).catch(err => logger.error(err.message, chain === CHAIN.Secret ? chainInfo.rest : chainInfo.rpc));
       }, err => obs.error(err));

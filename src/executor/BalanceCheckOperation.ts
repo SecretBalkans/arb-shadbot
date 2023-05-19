@@ -24,6 +24,8 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       isWrapped: this.data.isWrapped
     });
     let amountMax = this.data.amountMax;
+    // TODO: remove this hardcode of 0
+    let amountMin = this.data.amountMin ? BigNumber(0) || this.data.amountMin: null;
     if (amountMax !== 'max' && !(amountMax instanceof BigNumber)) {
       let resolvedAmount = await this.resolveArbOperationAmount({
         amount: amountMax,
@@ -53,23 +55,28 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
     });
 
     // TODO: remove this artificial amountMin check
-    return /*amount.isGreaterThan(this.data.amountMin)*/ amount.isGreaterThan(0) ? {
-      success: true,
-      result: {
-        amount,
-      },
-    } : {
-      success: false,
-      result: {
-        data: this.data.amountMin.toFixed(getTokenDenomInfo(SwapTokenMap[this.data.token]).decimals),
-        internal: amount,
-        message: `Not enough balance of ${this.data.token} on ${this.data.chain}. Minimum needed: ${this.data.amountMin}`,
-        reason: this.data.amountMin.isGreaterThan(0) ? FailReasons.MinAmount : FailReasons.NoBalance
-      },
-    };
+    if (!amountMin || amount.isGreaterThan(amountMin)) {
+      return {
+        success: true,
+        result: {
+          amount,
+        },
+      };
+    } else {
+      let dataAmountMinString = (amountMin || BigNumber(0)).toFixed(getTokenDenomInfo(SwapTokenMap[this.data.token]).decimals);
+      return {
+        success: false,
+        result: {
+          data: dataAmountMinString,
+          internal: amount,
+          message: `Not enough balance of ${this.data.token} on ${this.data.chain}. Minimum needed: ${dataAmountMinString}`,
+          reason: amountMin && amountMin.isGreaterThan(0) ? FailReasons.MinAmount : FailReasons.NoBalance
+        },
+      };
+    }
   }
 
-  private ORIGIN_CHAIN_MIN_FEE_MULTIPLIER = 10;
+  private ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER = 20;
 
   id(): string {
     return `${this.data.chain}.${SwapTokenMap[this.data.token]}`;
@@ -92,7 +99,7 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
     const gasFeeInfo = getGasFeeInfo(originChain);
     const assetNativeChain: CHAIN = getChainByChainId(getTokenDenomInfo(SwapTokenMap[asset]).chainId);
     let moveAmount: BigNumber;
-    const reserveAmount = BigNumber(gasFeeInfo.amount).multipliedBy(this.ORIGIN_CHAIN_MIN_FEE_MULTIPLIER);
+    const reserveAmount = BigNumber(gasFeeInfo.amount).multipliedBy(this.ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER);
 
     if (amountMax === 'max') {
       moveAmount = balanceAmount;

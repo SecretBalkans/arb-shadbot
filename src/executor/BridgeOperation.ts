@@ -1,5 +1,4 @@
 import {
-  BridgeOperationData,
   BridgeOperationType,
   FailReasons,
   IArbOperationExecuteResult,
@@ -9,7 +8,7 @@ import {
 import {Logger} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import BigNumber from 'bignumber.js';
-import {getChainByChainId, getTokenDenomInfo, SwapTokenMap} from '../ibc';
+import {CHAIN, getChainByChainId, getTokenDenomInfo, SwapToken, SwapTokenMap} from '../ibc';
 import {convertCoinToUDenomV2, makeIBCMinimalDenom} from '../utils/denoms';
 import {StdFee} from '@cosmjs/stargate';
 import {MsgTransfer} from 'cosmjs-types/ibc/applications/transfer/v1/tx';
@@ -17,6 +16,7 @@ import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {getGasFeeInfo} from "./utils";
 import {Amount} from "../ibc";
 import {ArbOperationSequenced} from "./aArbOperation";
+import InjectiveClient from "../wallet/clients/InjectiveClient";
 
 function getTimeoutTimestamp() {
   const timeoutInMinutes = 15;
@@ -31,7 +31,6 @@ function getTimeoutTimestamp() {
 }
 
 
-
 export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> {
   type() {
     return 'Bridge';
@@ -44,17 +43,32 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
   }
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<BridgeOperationType> }> {
-    const result = await this.transferIBC(this.data, arbWallet, balanceMonitor);
-
-    return (result instanceof BigNumber) ? {
-      success: true,
-      result: {
-        amount: result,
-      },
-    } : {
-      success: false,
-      result,
-    };
+    let resolvedAmount = await this.resolveArbOperationAmount({
+      amount: this.data.amount,
+      token: this.data.token
+    }, arbWallet, balanceMonitor);
+    if (resolvedAmount instanceof BigNumber) {
+      const result = await this.transferIBC({
+        amount: resolvedAmount,
+        from: this.data.from,
+        to: this.data.to,
+        token: this.data.token,
+      }, arbWallet);
+      return (result instanceof BigNumber) ? {
+        success: true,
+        result: {
+          amount: result,
+        },
+      } : {
+        success: false,
+        result,
+      };
+    } else {
+      return {
+        success: false,
+        result: resolvedAmount
+      };
+    }
   }
 
   private async transferIBC({
@@ -62,16 +76,18 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
                               to,
                               token,
                               from,
-                            }: BridgeOperationData, arbWallet, balanceMonitor): Promise<Amount | IFailingArbInfo> {
-    let resolvedAmount = await this.resolveArbOperationAmount({ amount: amount, token: token },  arbWallet, balanceMonitor);
-    if(!(resolvedAmount instanceof BigNumber)) {
-      return resolvedAmount;
-    }
+                            }: {
+                              from: CHAIN,
+                              to: CHAIN,
+                              amount: Amount,
+                              token: SwapToken
+                            }
+    , arbWallet: ArbWallet): Promise<Amount | IFailingArbInfo> {
     if (from === to) {
-      return resolvedAmount;
+      return amount;
     }
 
-    this.logger.log(`Try transfer ${resolvedAmount.toString()} ${token} from ${from} to ${to}`.blue);
+    this.logger.log(`Try transfer ${amount.toString()} ${token} from ${from} to ${to}`.blue);
     const sender = await arbWallet.getAddress(from);
     const receiver = await arbWallet.getAddress(to);
 
@@ -95,7 +111,7 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
     } else {
       sentTokenDenom = makeIBCMinimalDenom(sourceChannel, chainDenom);
     }
-    this.logger.log(`Will transfer ${resolvedAmount} ${token} from (${from}/${sender}) to (${to}/${receiver}) (${sourceChannel})`);
+    this.logger.log(`Will transfer ${amount} ${token} from (${from}/${sender}) to (${to}/${receiver}) (${sourceChannel})`);
 
     /*if (from === CHAIN.Secret && sentTokenDenom) {
       let info = arbWallet.getSecretAddress(token);
@@ -150,7 +166,7 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
         receiver,
         token: {
           denom: sentTokenDenom,
-          amount: convertCoinToUDenomV2(resolvedAmount, sentTokenDecimals).toString(),
+          amount: convertCoinToUDenomV2(amount, sentTokenDecimals).toString(),
         },
         timeoutHeight: {
           // revisionNumber: // TODO: figure out revision number,
@@ -171,32 +187,23 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
       gas: '350000',
     };
 // }
+    let txnStatus;
 
-    const client = await arbWallet.getClient(from);
     try {
-      const txnStatus = await client.signAndBroadcast(
-        sender,
-        [unsignedTransferMsg],
-        fee,
-      );
-
-      try {
-        if (!txnStatus.rawLog.includes('denomination trace not found')) {
-          // Validate that there is the amount meaning we have good tx
-          // tslint:disable-next-line:no-unused-expression
-          JSON.parse(JSON.parse(txnStatus.rawLog)[0].events.find(({type}) => type === 'send_packet').attributes.find(({key}) => key === 'packet_data').value).amount;
-        } else {
-          throw new Error('Wrong channel')
-        }
-      } catch (err) {
-        this.logger.error('Transfer error'.red, txnStatus.rawLog);
-        //cleanupClient(from);
-        //continue;
-
-        // noinspection ExceptionCaughtLocallyJS
-        throw new Error('Transfer Error');
+      if (from === CHAIN.Injective) {
+        const injectiveClient = new InjectiveClient({
+          privateHex: arbWallet.config.privateHex,
+          mnemonic: arbWallet.config.mnemonic
+        });
+        txnStatus = await injectiveClient.broadcastTransaction([unsignedTransferMsg])
+      } else {
+        const client = await arbWallet.getClient(from);
+        txnStatus = await client.signAndBroadcast(
+          sender,
+          [unsignedTransferMsg],
+          fee,
+        );
       }
-      return resolvedAmount;
     } catch (err) {
       this.logger.error('Transfer general error'.red, err);
       return {
@@ -204,6 +211,25 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
         reason: err.message
       };
     }
+
+    try {
+      if (!txnStatus.rawLog.includes('denomination trace not found')) {
+        // Validate that there is the amount meaning we have good tx
+        // tslint:disable-next-line:no-unused-expression
+        JSON.parse(JSON.parse(txnStatus.rawLog)[0].events.find(({type}) => type === 'send_packet').attributes.find(({key}) => key === 'packet_data').value).amount;
+      } else {
+        throw new Error('Wrong channel ?!')
+      }
+    } catch (err) {
+      this.logger.error('Transfer error'.red, txnStatus.rawLog);
+      //cleanupClient(from);
+      //continue;
+
+      // noinspection ExceptionCaughtLocallyJS
+      throw new Error('Transfer Error');
+    }
+    return amount;
+
   }
 
   id()

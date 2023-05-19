@@ -1,21 +1,15 @@
-import {
-  FailReasons,
-  IArbOperationExecuteResult,
-  IOperationData,
-  SwapOperationType
-} from './types';
+import {FailReasons, IArbOperationExecuteResult, IOperationData, SwapOperationType} from './types';
 import {fetchTimeout, Logger} from '../utils';
-import {Amount, SwapTokenMap, Token} from '../ibc';
+import {Amount, CHAIN, getTokenDenomInfo, SwapTokenMap, Token} from '../ibc';
 import {ArbWallet, getChainUrl, swapTypeUrlOsmo} from '../wallet/ArbWallet';
 import {getTokenBaseDenomInfo} from '../ibc/tokens';
 import {convertCoinToUDenomV2} from '../utils/denoms';
-import {CHAIN, getTokenDenomInfo} from '../ibc';
 import BigNumber from 'bignumber.js';
 import _ from 'lodash';
 import {getGasFeeInfo} from './utils';
 import Aigle from 'aigle';
 import {toBase64} from '@cosmjs/encoding';
-import { ArbOperationSequenced} from './aArbOperation';
+import {ArbOperationSequenced} from './aArbOperation';
 import {BalanceMonitor} from "../balances/BalanceMonitor";
 
 function getLog({ rawLog }: { rawLog: string }) {
@@ -58,22 +52,26 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
     const tokenDenomInfo = getTokenBaseDenomInfo(this.token0);
     const receivedDenomInfo = getTokenBaseDenomInfo(this.token1);
     const slippage = 0.02;
+
     let minReceivingAmountString = '1000' || convertCoinToUDenomV2(this.data.expectedReturn.multipliedBy(1 - slippage) || BigNumber(0.001), receivedDenomInfo.decimals).toFixed(0);
-    let sentDenom = tokenDenomInfo.baseDenom, receivedDenom;
-    let bigNumberAmountResult = amount;
-    let sentAmountString = convertCoinToUDenomV2(bigNumberAmountResult, tokenDenomInfo.decimals).toString().split('.')[0];
+    // TODO: BigNumber(1) hardcoded swap amount to be able to repeat
+    let bigNumberAmountResult = BigNumber.minimum(1, amount);
+    let sentAmountString =  convertCoinToUDenomV2(bigNumberAmountResult, tokenDenomInfo.decimals).toString().split('.')[0];
     this.logger.log(`Swap ${bigNumberAmountResult.toNumber()} (${sentAmountString}) ${this.token0} > ${this.token1} in ${this.data.dex}`);
     switch (this.data.dex) {
       case 'osmosis':
         const chainOsmosis = CHAIN.Osmosis;
         const client = await arbWallet.getClient(chainOsmosis);
 
+        let sentDenom = arbWallet.makeIBCHash(this.token0, CHAIN.Osmosis),
+          receivedDenom = arbWallet.makeIBCHash(this.token1, CHAIN.Osmosis);
+
       function getOsmoResult(result, token: Token): Amount {
         return BigNumber(_.findLast(_.find(getLog(result).events, { type: 'coin_spent' }).attributes, { key: 'amount' }).value.match(/\d+/)[0]).dividedBy(10 ** getTokenBaseDenomInfo(token).decimals);
       }
 
         const fee = {
-          'gas': '500000',
+          'gas': '' + this.data.route.length * 25e4,
           'amount': [
             {
               'denom': 'uosmo',
@@ -90,7 +88,16 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
               let tokenOutDenom;
               if (i === 0) {
                 let data = await fetchTimeout(`${getChainUrl(chainOsmosis, true)}/osmosis/gamm/v1beta1/pools/${poolId}`);
-                let { pool: { pool_liquidity: [{ denom: denom1 } , { denom: denom2 }] } } = data;
+                let denom1, denom2;
+                if(data.pool.pool_liquidity) {
+                  let {pool: {pool_liquidity: [{denom: d1}, {denom: d2}]}} = data;
+                  denom1 = d1;
+                  denom2 = d2;
+                } else {
+                  let { pool: { pool_assets: [ { token : { denom: d1 } } , { token : { denom: d2 }}] } } = data;
+                  denom1 = d1;
+                  denom2 = d2;
+                }
                 tokenOutDenom = sentDenom === denom1 ? denom2 : denom1;
               } else {
                 tokenOutDenom = receivedDenom;
@@ -182,7 +189,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
                 'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
                 'padding': 'u3a9nScQ',
               },
-            }, gasPrice: 0.0195, gasLimit: 3_530_000
+            }, gasPrice: 0.0195, gasLimit: 65e4 * (0.4 + apContractPath.length)
           }, // TODO: see shade UI gas fee calculation based on hops
         );
         try {

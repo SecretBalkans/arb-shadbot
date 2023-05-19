@@ -1,5 +1,4 @@
 import {
-  AmountOperationResult, BalanceCheckOperationResult,
   FailReasons,
   IArbOperationExecuteResult,
   IFailingArbInfo,
@@ -11,10 +10,7 @@ import {Logger} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import BigNumber from "bignumber.js";
-import {Amount, SwapToken, SwapTokenMap} from "../ibc";
-import {getTokenBaseDenomInfo} from "../ibc/tokens";
-import {BalanceCheckOperation} from "./BalanceCheckOperation";
-import {SwapOperation} from "./SwapOperation";
+import {Amount, SwapToken} from "../ibc";
 
 export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   private _result: { success: boolean; result: IArbOperationExecuteResult<T>; };
@@ -68,11 +64,11 @@ export abstract class ArbOperationSequenced<T extends SwapMoveOperationsType> ex
     token: SwapToken,
   }, arbWallet, balanceMonitor): Promise<Amount | IFailingArbInfo> {
     let resolvedAmount, arbOperation;
-    if (!(amount instanceof BigNumber)) {
-      arbOperation = await amount.execute(arbWallet, balanceMonitor);
-      resolvedAmount = arbOperation.success ? arbOperation.result.amount : new BigNumber(arbOperation.result.internal);
-    } else {
+    if (amount instanceof BigNumber) {
       resolvedAmount = amount;
+    } else {
+      arbOperation = await amount.execute(arbWallet, balanceMonitor);
+      resolvedAmount = arbOperation.success ? arbOperation.result.amount : new BigNumber(arbOperation.result?.internal || 0);
     }
     if ((arbOperation && !arbOperation?.success) || resolvedAmount.isEqualTo(0)) {
       return arbOperation.result;

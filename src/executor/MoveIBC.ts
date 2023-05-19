@@ -2,7 +2,7 @@ import {CHAIN, getChainByChainId, getTokenDenomInfo, SUPPORTED_CHAINS} from '../
 import {Amount, SwapToken, SwapTokenMap} from '../ibc';
 import {BalanceMonitor, CanLog} from '../balances/BalanceMonitor';
 import {Logger} from '../utils';
-import {AmountOperationResult, IbcMoveAmount, IBCMoveCHAIN, MoveOperationType, SwapMoveOperationsType} from './types';
+import {IbcMoveAmount, IBCMoveCHAIN, MoveOperationType, SwapMoveOperationsType} from './types';
 import _ from 'lodash';
 import {BalanceWaitOperation} from './BalanceWaitOperation';
 import {BalanceCheckOperation} from './BalanceCheckOperation';
@@ -92,7 +92,7 @@ export default class MoveIBC implements CanLog {
     const assetNativeChain: CHAIN = getChainByChainId(getTokenDenomInfo(SwapTokenMap[token]).chainId);
 
 
-    let secretSnipOperationOnDestination = toChain === CHAIN.Secret ? new SecretSNIPOperation({
+    let secretSnipOperationOnDestination = toChain === CHAIN.Secret ? [new SecretSNIPOperation({
       token,
       wrap: true,
       amount: new BalanceWaitOperation({
@@ -100,11 +100,15 @@ export default class MoveIBC implements CanLog {
         token,
         isWrapped: false
       }),
-    }) : new BalanceWaitOperation({
+    }), new BalanceWaitOperation({
+      chain: toChain,
+      token,
+      isWrapped: true
+    })] : [new BalanceWaitOperation({
       chain: toChain,
       token,
       isWrapped: false
-    });
+    })];
 
     let secretSNIPOperationOnOrigin = isWrappedOriginBalance ? [new SecretSNIPOperation({
       token,
@@ -123,7 +127,7 @@ export default class MoveIBC implements CanLog {
     })] : [];
     let result: ArbOperation<MoveOperationType>[];
     if (assetNativeChain === toChain || assetNativeChain === fromChain) {
-      // Move Native asset from/to it's chain
+      // Move Native asset from/to it's own chain directly
       result = [
         ...secretSNIPOperationOnOrigin,
         new BridgeOperation({
@@ -138,10 +142,10 @@ export default class MoveIBC implements CanLog {
             isWrapped: false,
           }),
         }),
-        secretSnipOperationOnDestination
+        ...secretSnipOperationOnDestination
       ];
     } else {
-      const initialMove = [
+      result = [
         ...secretSNIPOperationOnOrigin,
         new BridgeOperation({
           from: fromChain,
@@ -154,20 +158,17 @@ export default class MoveIBC implements CanLog {
             amountMin,
             isWrapped: false
           }),
-        })];
-      result = [
-        ...initialMove,
-        new BalanceWaitOperation({
-          chain: assetNativeChain,
-          token,
-          isWrapped: false,
         }), new BridgeOperation({
           from: assetNativeChain,
           to: toChain,
-          amount: _.last(initialMove),
+          amount: new BalanceWaitOperation({
+            chain: assetNativeChain,
+            token,
+            isWrapped: false,
+          }),
           token,
         }),
-        secretSnipOperationOnDestination];
+        ...secretSnipOperationOnDestination];
     }
     return _.compact(result);
   }

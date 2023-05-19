@@ -14,7 +14,7 @@ import _ from 'lodash';
 
 import {CHAIN, getChainByChainId, getChainInfo, getTokenDenomInfo, SecretContractAddress} from '../ibc';
 import {DenomInfo} from '../ibc/tokens';
-import {Amount, Denom, IBCHash, isSwapToken, SwapToken, SwapTokenMap, Token} from '../ibc/dexTypes';
+import {Amount, Denom, IBCHash, isSwapToken, SwapToken, SwapTokenMap, Token} from '../ibc';
 import {CosmWasmClient} from '@cosmjs/cosmwasm-stargate';
 import {fetchTimeout, Logger} from '../utils';
 import {initPairsRaw, initTokens} from '../ibc/shade-resgistry/shadeRest';
@@ -27,9 +27,10 @@ import path from 'path';
 import {loadSync} from 'protobufjs';
 import {SerializedBalanceUpdate} from '../balances/BalanceMonitor';
 import {accountFromAnyStrideSupport} from './customAccountParser';
+import {ArbWalletConfig} from './types';
+import InjectiveClient from "./clients/InjectiveClient";
 
 const logger = new Logger('ArbWallet');
-export type ArbWalletConfig = { mnemonic?: string, privateHex?: string, secretNetworkViewingKey: string };
 
 export const swapTypeUrlOsmo = '/osmosis.gamm.v1beta1.MsgSwapExactAmountIn';
 
@@ -43,7 +44,7 @@ type IBCChannel = Brand<string, 'IBCChannel'>;
 export type IBCResource = { channelId: string, chain: CHAIN, maxClockDrift: number };
 
 export class ArbWallet {
-  private readonly config: ArbWalletConfig;
+  public readonly config: ArbWalletConfig;
   private readonly CODE_HASH_CACHE = {};
   private readonly CONTRACT_MSG_CACHE = {};
   private secretClient: SecretNetworkClient;
@@ -331,6 +332,10 @@ export class ArbWallet {
   }
 
   public async getAddress(chain: CHAIN, suffix = '0'): Promise<string> {
+    if (chain === CHAIN.Injective) {
+      const injClient = new InjectiveClient({mnemonic: this.config.mnemonic, privateHex: this.config.privateHex});
+      return injClient.publicAddress.address;
+    }
     const wallet = await this.setupWallet(chain, suffix);
     const [firstAccount] = await wallet.getAccounts();
     return firstAccount.address;
@@ -432,7 +437,7 @@ export class ArbWallet {
       code_hash: this.CODE_HASH_CACHE[contractAddress],
       sender: client.address,
       msg,
-      ...(sentFunds.length ? { sent_funds: sentFunds.map(({denom,amount}) => ({ denom, amount})) } : {})
+      ...(sentFunds.length ? {sent_funds: sentFunds.map(({denom, amount}) => ({denom, amount}))} : {})
     })], {
       waitForCommit,
       gasLimit,
@@ -605,7 +610,7 @@ export class ArbWallet {
         fs.writeFileSync(this.getFsCachePath(chain), JSON.stringify(pick), {encoding: 'utf-8'});
         return [chain, pick];
       }));
-      this.logger.log('IBC info reloaded for all chains.')
+      this.logger.log('IBC info reloaded for all clients.')
     }
 
     this.ibcInfo = _(allChainChannelGroups).toPairs().map(([chain, chainChannelGroup]) => {
@@ -628,9 +633,14 @@ export class ArbWallet {
     }).fromPairs().value() as any;
   }
 
-  public makeIBCHash (token: Token, chain:CHAIN): IBCHash {
+  public makeIBCHash(token: Token, chain: CHAIN): IBCHash {
     const tokenDenomInfo = getTokenDenomInfo(token, false);
-    return makeIBCMinimalDenom(this.getTransferChannelId(chain, getChainByChainId(tokenDenomInfo.chainId)), tokenDenomInfo.chainDenom)
+    let destinationChain = getChainByChainId(tokenDenomInfo.chainId);
+    if (destinationChain === chain) {
+      return tokenDenomInfo.chainDenom as string as IBCHash;
+    } else {
+      return makeIBCMinimalDenom(this.getTransferChannelId(chain, destinationChain), tokenDenomInfo.chainDenom)
+    }
   }
 
   private async initMapOfZonesCache() {
@@ -790,33 +800,42 @@ export class BalanceMap {
                                                                   denomInfo: {
                                                                     isWrapped,
                                                                     decimals,
-                                                                    chainDenom},
+                                                                    chainDenom
+                                                                  },
                                                                 }) => {
-      const pastBalance = _.find(pastBalanceMap?.tokenBalances, { denomInfo: { isWrapped }, token });
+      const pastBalance = _.find(pastBalanceMap?.tokenBalances, {denomInfo: {isWrapped}, token});
       const diffAmount = pastBalance ? BigNumber(amount).minus(pastBalance.amount) : amount;
       return !diffAmount.isEqualTo(0) ? {
         chainDenom: chainDenom,
         isWrapped,
-        amount: convertCoinToUDenomV2(diffAmount, decimals).toString(),
+        token,
+        amount: diffAmount,
       } : null;
     }));
-    _.forEach(pastBalanceMap?.tokenBalances, ({denomInfo: {chainDenom, isWrapped}, amount}) => {
-      if (!_.find(this.tokenBalances, {denomInfo: {chainDenom: chainDenom, isWrapped}})) {
-        // if we do not have the past denom, then add it with a -
-        newBalancesRaw.push({chainDenom: chainDenom, amount: '-' + amount, isWrapped});
+    _.forEach(pastBalanceMap?.tokenBalances, ({denomInfo: {chainDenom, isWrapped}, token, amount}) => {
+      if (!_.find(this.tokenBalances, {token, denomInfo: {chainDenom: chainDenom, isWrapped}})) {
+        // if we do not have the past denom, then add it with a - indicating it dissapeared
+        newBalancesRaw.push({chainDenom: chainDenom, token, amount: amount.multipliedBy(-1), isWrapped});
       } else {
         // do nothing as we have already subtracted amounts that we have
       }
     });
 
-    return new BalanceMap(this.chain, this.tokenBalances);
+    return new BalanceMap(this.chain, newBalancesRaw.map(({amount, isWrapped, token}) => ({
+      denomInfo: getTokenDenomInfo(SwapTokenMap[token], isWrapped),
+      amount,
+      token
+    })));
   }
 
 
   updateBalances(balanceUpdate: SerializedBalanceUpdate) {
     _.forEach(balanceUpdate.balances, ({token, denomInfo, amount}) => {
-      let tokenInBalance = _.find(this.tokenBalances, { token, denomInfo: {isWrapped: denomInfo.isWrapped}}) as TokenBalanceWithDenomInfo;
-      if(tokenInBalance) {
+      let tokenInBalance = _.find(this.tokenBalances, {
+        token,
+        denomInfo: {isWrapped: denomInfo.isWrapped}
+      }) as TokenBalanceWithDenomInfo;
+      if (tokenInBalance) {
         tokenInBalance.amount = convertCoinFromUDenomV2(amount, denomInfo.decimals);
       } else {
         this.tokenBalances.push({
