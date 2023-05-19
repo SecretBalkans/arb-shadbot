@@ -17,7 +17,6 @@ import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {getGasFeeInfo} from "./utils";
 import {Amount} from "../ibc";
 import {ArbOperationSequenced} from "./aArbOperation";
-import MoveIBC from "./MoveIBC";
 
 function getTimeoutTimestamp() {
   const timeoutInMinutes = 15;
@@ -66,13 +65,7 @@ export class BridgeOperation extends ArbOperationSequenced<BridgeOperationType> 
                             }: BridgeOperationData, arbWallet, balanceMonitor): Promise<Amount | IFailingArbInfo> {
     let resolvedAmount = await this.resolveArbOperationAmount({ amount: amount, token: token },  arbWallet, balanceMonitor);
     if(!(resolvedAmount instanceof BigNumber)) {
-      const msgRsn = resolvedAmount.reason === FailReasons.MinAmount ? `less than amountMin estimation ${resolvedAmount.data} ${token}` : resolvedAmount.reason === FailReasons.NoBalance ? `balance is ${resolvedAmount.data} ${token}` : `${resolvedAmount.reason}`;
-      const message = `Can't move ${resolvedAmount.data} ${token} from chain ${from} to ${to}. Reason: ${msgRsn}`;
-
-      return {
-        ...resolvedAmount,
-        message
-      };
+      return resolvedAmount;
     }
     if (from === to) {
       return resolvedAmount;

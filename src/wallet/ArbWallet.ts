@@ -452,7 +452,7 @@ export class ArbWallet {
 
   async getBalancesOnChain(chain: CHAIN, suffix = '0'): Promise<BalanceMap> {
     await this.initIBCInfoCache();
-    let secretBalances: TokenBalanceMapWithDenomInfo = [];
+    let secretBalances: TokenBalanceWithDenomInfo[] = [];
     const rpcClient = await this.getClient(chain, false, suffix);
     const address = await this.getAddress(chain, suffix);
     if (chain === CHAIN.Secret) {
@@ -478,7 +478,7 @@ export class ArbWallet {
     return new BalanceMap(chain, [...secretBalances, ...this.parseTokenBalances(chain, balancesRaw as BalancesRaw)]);
   }
 
-  parseTokenBalances(chain: CHAIN, balancesRaw: BalancesRaw): TokenBalanceMapWithDenomInfo {
+  parseTokenBalances(chain: CHAIN, balancesRaw: BalancesRaw): TokenBalanceWithDenomInfo[] {
     const parsedBalances: ParsedTokenBalance[] = _.map(balancesRaw, this.parseBalance.bind(this, chain)).filter((d: ParsedTokenBalance) => {
       return isSwapToken(d?.token);
     });
@@ -630,7 +630,7 @@ export class ArbWallet {
 
   public makeIBCHash (token: Token, chain:CHAIN): IBCHash {
     const tokenDenomInfo = getTokenDenomInfo(token, false);
-    return makeIBCMinimalDenom(this.getTransferChannelId(getChainByChainId(tokenDenomInfo.chainId), CHAIN.Secret), tokenDenomInfo.chainDenom)
+    return makeIBCMinimalDenom(this.getTransferChannelId(chain, getChainByChainId(tokenDenomInfo.chainId)), tokenDenomInfo.chainDenom)
   }
 
   private async initMapOfZonesCache() {
@@ -746,14 +746,13 @@ export type BalancesRaw = {
 type ParsedTokenBalance = { denom: string, token: Token, amount: Amount, rawAmount: string };
 
 export type TokenBalanceWithDenomInfo = { token: SwapToken, amount: Amount, denomInfo: DenomInfo };
-type TokenBalanceMapWithDenomInfo = TokenBalanceWithDenomInfo[];
 
-export type SerializedBalanceMap = { token: string, amount: string, denomInfo: DenomInfo }[];
+export type SerializedBalances = { token: string, amount: string, denomInfo: DenomInfo }[];
 
 export class BalanceMap {
-  tokenBalances: TokenBalanceMapWithDenomInfo = [];
+  tokenBalances: TokenBalanceWithDenomInfo[] = [];
 
-  constructor(public readonly chain: CHAIN, tokenBalances: TokenBalanceMapWithDenomInfo) {
+  constructor(public readonly chain: CHAIN, tokenBalances: TokenBalanceWithDenomInfo[]) {
     this.tokenBalances = tokenBalances;
   }
 
@@ -768,7 +767,7 @@ export class BalanceMap {
   }
 
 
-  toJSON(): SerializedBalanceMap {
+  toJSON(): SerializedBalances {
     return this.tokenBalances.map(({token, amount, denomInfo}) => ({
       denomInfo,
       amount: convertCoinToUDenomV2(amount, denomInfo.decimals).toString(),
@@ -815,15 +814,15 @@ export class BalanceMap {
 
 
   updateBalances(balanceUpdate: SerializedBalanceUpdate) {
-    _.forEach(balanceUpdate.balances, (data, token) => {
-      let tokenInBalance = _.find(this.tokenBalances, { token, denomInfo: {isWrapped: data.denomInfo.isWrapped}}) as TokenBalanceWithDenomInfo;
+    _.forEach(balanceUpdate.balances, ({token, denomInfo, amount}) => {
+      let tokenInBalance = _.find(this.tokenBalances, { token, denomInfo: {isWrapped: denomInfo.isWrapped}}) as TokenBalanceWithDenomInfo;
       if(tokenInBalance) {
-        tokenInBalance.amount = convertCoinFromUDenomV2(data.amount, data.denomInfo.decimals);
+        tokenInBalance.amount = convertCoinFromUDenomV2(amount, denomInfo.decimals);
       } else {
         this.tokenBalances.push({
-          ...data,
+          denomInfo,
           token: SwapTokenMap[token],
-          amount: convertCoinFromUDenomV2(data.amount, data.denomInfo.decimals)
+          amount: convertCoinFromUDenomV2(amount, denomInfo.decimals)
         })
       }
     });

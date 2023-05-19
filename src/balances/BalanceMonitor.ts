@@ -2,22 +2,21 @@ import {CHAIN, getChainByChainId, getChainInfo} from '../ibc';
 import {Observable} from 'rxjs';
 import {filter, map} from 'rxjs/operators';
 import cosmosObserver from '../wallet/CosmosObserver';
-import {ArbWallet, BalanceMap, SerializedBalanceMap, TokenBalanceWithDenomInfo} from '../wallet/ArbWallet';
+import {ArbWallet, BalanceMap, SerializedBalances} from '../wallet/ArbWallet';
 import _ from 'lodash';
 import {Logger} from '../utils';
-import {Amount, SwapToken, SwapTokenMap, Token} from '../ibc/dexTypes';
+import {Amount, SwapToken, SwapTokenMap, Token} from '../ibc';
 import EventEmitter from 'events';
 import BigNumber from 'bignumber.js';
 import {convertCoinFromUDenomV2} from '../utils/denoms';
 import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from '../executor/MoveIBC';
-import {DenomInfo} from '../ibc/tokens';
 import {execute} from "../graphql/gql-execute";
 import gql from 'graphql-tag';
 
 export interface SerializedBalanceUpdate {
   chain: CHAIN,
-  balances: SerializedBalanceMap,
-  diff: SerializedBalanceMap,
+  balances: SerializedBalances,
+  diff: SerializedBalances,
 }
 
 export class BalanceUpdate {
@@ -95,11 +94,11 @@ export class BalanceMonitor implements CanLog {
   public readonly events = new EventEmitter();
 
   public getTokenAmount(chain: CHAIN, token: Token, isWrapped: boolean): Amount {
-    return (_.find(this.balances[chain]?.tokenBalances, { token, denomInfo: {isWrapped} }) as TokenBalanceWithDenomInfo)?.amount || BigNumber(0);
+    return this.getTokenInfoInternal(this.balances[chain]?.tokenBalances, token, isWrapped)?.amount || BigNumber(0);
   }
 
-  public getFullTokenBalanceInfo(chain: CHAIN, token: Token): { amount: BigNumber, denomInfo: DenomInfo } {
-    return this.balances[chain]?.tokenBalances[token]
+  public getTokenInfoInternal<T extends {token: P, amount: P, denomInfo: K}, P extends string | BigNumber, K extends {decimals: number, isWrapped?: boolean}>(balances: T[], token: string, isWrapped: boolean): T | undefined {
+    return _.find(balances, {token, denomInfo: {isWrapped}}) as any as T | undefined;
   }
 
   public updateBalances(balanceUpdate: SerializedBalanceUpdate) {
@@ -119,9 +118,9 @@ export class BalanceMonitor implements CanLog {
       this.enabledLocalDBUpdate = true;
       this.events.on('balance', (balanceUpdate: SerializedBalanceUpdate) => {
         let balanceObject = {
-          balances: _(balanceUpdate.balances).toPairs().map(([key, val]) => {
+          balances: _(balanceUpdate.balances).map((val) => {
             let amount = convertCoinFromUDenomV2(val.amount, val.denomInfo.decimals).toFixed(val.denomInfo.decimals);
-            let token = SwapTokenMap[key];
+            let token = SwapTokenMap[val.token];
             if (val.denomInfo.isWrapped && (token === SwapToken.SCRT || getChainByChainId(val.denomInfo.chainId) !== CHAIN.Secret)) {
               return [`s${token}`, amount];
             } else {
@@ -169,9 +168,9 @@ export class BalanceMonitor implements CanLog {
         this.logger.log(`Waiting for ${isBalanceCheck ? 'balance' : 'transfer'} of ${token} to ${chain}...`.blue);
         const listener = (balanceUpdate: SerializedBalanceUpdate) => {
           const prop = isBalanceCheck ? 'balances' : 'diff';
-          if (balanceUpdate.chain === chain && BigNumber(balanceUpdate[prop][swapToken]?.amount).isGreaterThan(0)) {
+          if (balanceUpdate.chain === chain && BigNumber(this.getTokenInfoInternal(balanceUpdate[prop] as SerializedBalances, swapToken,isWrapped)?.amount).isGreaterThan(0)) {
             this.events.removeListener('balance', listener);
-            resolve(BigNumber(convertCoinFromUDenomV2(balanceUpdate[prop][swapToken]?.amount, balanceUpdate[prop][swapToken]?.denomInfo.decimals)));
+            resolve(BigNumber(convertCoinFromUDenomV2(this.getTokenInfoInternal(balanceUpdate[prop] as SerializedBalances, swapToken, isWrapped)?.amount, this.getTokenInfoInternal(balanceUpdate[prop], swapToken, isWrapped)?.denomInfo.decimals)));
           }
           return false;
         };

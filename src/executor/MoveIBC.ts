@@ -61,22 +61,32 @@ export default class MoveIBC implements CanLog {
     }
 
     if (fromChain === toChain) {
-      let balanceCheckOperation = new BalanceCheckOperation({
-        chain: toChain,
-        token,
-        amountMax: amount,
-        amountMin,
-        // Ensure that the result for Secret is the wrapped in the BalanceCheckOperation
-        isWrapped: toChain === CHAIN.Secret && isWrappedOriginBalance
-      });
       return [
         // Wrap if we found that the best balance is unwrapped on Secret
         ...(!isWrappedOriginBalance && toChain === CHAIN.Secret ? [new SecretSNIPOperation({
           token,
-          amount: balanceCheckOperation,
+          amount: new BalanceCheckOperation({
+            chain: toChain,
+            token,
+            amountMax: amount,
+            amountMin,
+            isWrapped: false
+          })
+          ,
           wrap: true
-        }), balanceCheckOperation] : [
-          balanceCheckOperation
+        }), new BalanceWaitOperation({
+          chain: CHAIN.Secret,
+          token,
+          isWrapped: true
+        })] : [
+          new BalanceCheckOperation({
+            chain: toChain,
+            token,
+            amountMax: amount,
+            amountMin,
+            // Ensure that the result for Secret is the wrapped in the BalanceCheckOperation
+            isWrapped: toChain === CHAIN.Secret
+          })
         ])];
     }
     const assetNativeChain: CHAIN = getChainByChainId(getTokenDenomInfo(SwapTokenMap[token]).chainId);
@@ -96,7 +106,7 @@ export default class MoveIBC implements CanLog {
       isWrapped: false
     });
 
-    let secretSNIPOperationOnOrigin = isWrappedOriginBalance ? new SecretSNIPOperation({
+    let secretSNIPOperationOnOrigin = isWrappedOriginBalance ? [new SecretSNIPOperation({
       token,
       unwrap: true,
       amount: new BalanceCheckOperation({
@@ -106,13 +116,16 @@ export default class MoveIBC implements CanLog {
         amountMin: amountMin,
         isWrapped: true
       })
-    }) : null;
+    }), new BalanceWaitOperation({
+      chain: CHAIN.Secret,
+      token,
+      isWrapped: false
+    })] : [];
     let result: ArbOperation<MoveOperationType>[];
     if (assetNativeChain === toChain || assetNativeChain === fromChain) {
       // Move Native asset from/to it's chain
-      this.logger.log(`Plan move max ${token} from ${isWrappedOriginBalance ? 's' : ''}${fromChain} to ${toChain === CHAIN.Secret ? 's' : ''}${toChain} using single IBC tx.`.blue);
       result = [
-        secretSNIPOperationOnOrigin,
+        ...secretSNIPOperationOnOrigin,
         new BridgeOperation({
           from: fromChain,
           to: toChain,
@@ -128,9 +141,8 @@ export default class MoveIBC implements CanLog {
         secretSnipOperationOnDestination
       ];
     } else {
-      this.logger.log(`Plan move max ${token} from ${fromChain} to ${toChain} through ${assetNativeChain}`.blue);
       const initialMove = [
-        secretSNIPOperationOnOrigin,
+        ...secretSNIPOperationOnOrigin,
         new BridgeOperation({
           from: fromChain,
           to: assetNativeChain,

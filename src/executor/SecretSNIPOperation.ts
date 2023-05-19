@@ -28,24 +28,27 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
     }
     let secretAddress = arbWallet.getSecretAddress(this.data.token);
     let result;
-    let tokenDenomInfo = getTokenDenomInfo(SwapTokenMap[this.data.token]);
     let amountString = convertCoinToUDenomV2(resolvedAmount, secretAddress.decimals).toString();
+    let denom = this.data.token === 'SCRT' ? 'uscrt' as Denom : arbWallet.makeIBCHash(SwapTokenMap[this.data.token], CHAIN.Secret) as string as Denom;
     if (this.data.wrap) {
+      this.logger.log(`Wrap ${resolvedAmount} ${this.data.token}`.blue);
       result = await arbWallet.executeSecretContract({
         contractAddress: secretAddress.address, msg: {
           "deposit": {},
         }, gasPrice: 0.015, gasLimit: 60_000,
         sentFunds: [{
-          denom: arbWallet.makeIBCHash(SwapTokenMap[this.data.token], CHAIN.Secret) as string as Denom,
+          denom: denom,
           amount: amountString
         }]
       });
     } else {
+      this.logger.log(`Unwrap ${resolvedAmount} s${this.data.token}`.blue);
       result = await arbWallet.executeSecretContract({
-        contractAddress: secretAddress.address, msg: {
+        contractAddress: secretAddress.address,
+        msg: {
           "redeem": {
             "amount": amountString,
-            "denom": tokenDenomInfo.chainDenom.toString()
+            "denom": denom
           }
         }, gasPrice: 0.015, gasLimit: 60_000
       });

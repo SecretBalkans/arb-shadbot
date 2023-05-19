@@ -8,8 +8,6 @@ import {IFailingArbInfo, SwapMoveOperationsType} from "./types";
 import MoveIBC from "./MoveIBC";
 import {getDexOriginChain} from "../ibc";
 import {SwapOperation} from "./SwapOperation";
-import {BridgeOperation} from "./BridgeOperation";
-import {BalanceWaitOperation} from "./BalanceWaitOperation";
 
 export class ArbExecutor {
   public failedReason: IFailingArbInfo;
@@ -23,6 +21,8 @@ export class ArbExecutor {
 
   async execute(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<void> {
     const operationsQ = await this.getOperationsQueue(balanceMonitor);
+    // Print plan
+    // this.logger.log(`Plan move max ${token} from ${isWrappedOriginBalance ? 's' : ''}${fromChain} to ${toChain === CHAIN.Secret ? 's' : ''}${toChain} using single IBC tx.`.blue);
     await Aigle.findSeries(operationsQ, async op => {
       let result = await op.execute(arbWallet, balanceMonitor);
       if (!result.success) {

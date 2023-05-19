@@ -1,6 +1,4 @@
 import {
-  AmountOperationResult,
-  BalanceCheckOperationResult,
   FailReasons,
   IArbOperationExecuteResult,
   IOperationData,
@@ -184,7 +182,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
                 'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
                 'padding': 'u3a9nScQ',
               },
-            }, gasPrice: 0.125, gasLimit: 3_530_000
+            }, gasPrice: 0.0195, gasLimit: 3_530_000
           }, // TODO: see shade UI gas fee calculation based on hops
         );
         try {

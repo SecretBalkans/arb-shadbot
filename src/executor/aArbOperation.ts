@@ -41,7 +41,7 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
       return {
         success: false,
         result: {
-          internal: this._result.result,
+          internal: this._result?.result,
           data: err.message as string,
           reason: FailReasons.Unhandled
         }
@@ -75,7 +75,7 @@ export abstract class ArbOperationSequenced<T extends SwapMoveOperationsType> ex
       resolvedAmount = amount;
     }
     if ((arbOperation && !arbOperation?.success) || resolvedAmount.isEqualTo(0)) {
-      return arbOperation;
+      return arbOperation.result;
     }
     return resolvedAmount;
   }

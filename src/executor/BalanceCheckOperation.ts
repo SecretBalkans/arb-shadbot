@@ -33,7 +33,7 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
         amountMax = resolvedAmount;
       } else {
         const msgRsn = resolvedAmount.reason === FailReasons.MinAmount ? `less than amountMin estimation ${resolvedAmount.data} ${this.data.token}` : resolvedAmount.reason === FailReasons.NoBalance ? `balance is ${resolvedAmount.data} ${this.data.token}` : `${resolvedAmount.reason}`;
-        const message = `Can't use ${resolvedAmount.data} ${this.data.token} on chain ${this.data.chain}. Reason: ${msgRsn}`;
+        const message = `Can't use ${this.data.isWrapped ? "wrapped " : ''}${resolvedAmount.data} ${this.data.token} on chain ${this.data.chain}. Reason: ${msgRsn}`;
 
         return {
           success: false,
@@ -63,7 +63,7 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       result: {
         data: this.data.amountMin.toFixed(getTokenDenomInfo(SwapTokenMap[this.data.token]).decimals),
         internal: amount,
-        message: `Not enough balance of ${this.data.token}. Minimum needed: ${this.data.amountMin}`,
+        message: `Not enough balance of ${this.data.token} on ${this.data.chain}. Minimum needed: ${this.data.amountMin}`,
         reason: this.data.amountMin.isGreaterThan(0) ? FailReasons.MinAmount : FailReasons.NoBalance
       },
     };
@@ -106,7 +106,8 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       }
       // if this is the origin asset chain make sure to reserve
       if (balanceAmount.isLessThan(moveAmount.plus(reserveAmount))) {
-        moveAmount = balanceAmount.minus(reserveAmount); // TODO: ?? should we throw if we want to move too much instead of trimming it to 'max' ??
+        // Trim amount to the amount possible
+        moveAmount = balanceAmount.minus(reserveAmount);
       }
     }
     if (moveAmount.isGreaterThan(balanceAmount)) {
