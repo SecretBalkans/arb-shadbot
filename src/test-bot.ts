@@ -1,15 +1,17 @@
 import {BalanceMonitor, BalanceUpdate, SerializedBalanceUpdate, subscribeBalances} from './balances/BalanceMonitor';
-import {CHAIN, SUPPORTED_CHAINS} from './ibc';
+import {CHAIN, SUPPORTED_CHAINS, SwapToken} from './ibc';
 import {Logger} from './utils';
 import ipc from 'node-ipc';
 import colors from '@colors/colors';
 import cluster from 'cluster';
 import {Prices, subscribePrices} from './prices/prices';
 import {ArbWallet} from './wallet/ArbWallet';
-import {ArbV1Raw, parseRawArbV1, subscribeLiveArb, toRawArbV1} from './monitorGqlClient';
+import {ArbV1Raw, subscribeLiveArb, toRawArbV1} from './monitorGqlClient';
 import ArbBuilder from './executor/ArbBuilder';
 import config from './config';
-import {SwapToken} from "./ibc/dexTypes";
+import MoveIBC from "./executor/MoveIBC";
+import BigNumber from "bignumber.js";
+import Aigle from "aigle";
 
 colors.enable();
 
@@ -49,7 +51,7 @@ const bot0Wallet = new ArbWallet({
 
 (async () => {
   try {
-    await bot0Wallet.initSecretRegistry();
+    await bot0Wallet.initShadeRegistry();
     await bot0Wallet.initIBCInfoCache();
   } catch (err) {
     console.log('Init error'.red, err);
@@ -68,10 +70,10 @@ const bot0Wallet = new ArbWallet({
     let loggerInitialBalanceUpdate = {};
     let initialBalances: Record<string, BalanceUpdate> = {};
     ipc.serve(
-      function() {
+      function () {
         ipc.server.on(
           'connect',
-          function(socket) {
+          function (socket) {
             botSocket = socket;
             Object.values(initialBalances).forEach((b: BalanceUpdate) => {
               ipc.server.emit(
@@ -143,43 +145,72 @@ const bot0Wallet = new ArbWallet({
     ipc.config.logger = (msg) => logger.log(msg.gray);
     logger.log(`Started. Will connect to ${monitorId}.`);
     const balanceMonitor = new BalanceMonitor();
-    const executor = new ArbBuilder(bot0Wallet, balanceMonitor);
+    const arbBuilder = new ArbBuilder(bot0Wallet, balanceMonitor);
     balanceMonitor.enableLocalDBUpdates();
-    // HACK: delay some time to wait for secret funds to be resolved
-    await new Promise(resolve => setTimeout(resolve, 15000));
+
     ipc.connectTo(
       monitorId,
-      function() {
+      function () {
         setTimeout(() => {
           test().catch(err => {
             logger.error(err);
             debugger;
           });
-        }, 1000);
+        }, 100);
         ipc.of[monitorId].on(
           'balance',
-          function(data: SerializedBalanceUpdate) {
+          function (data: SerializedBalanceUpdate) {
             balanceMonitor.updateBalances(data);
           },
         );
         ipc.of[monitorId].on(
           'prices',
-          function(data: Prices) {
-            executor.updatePrices(data);
+          function (data: Prices) {
+            arbBuilder.updatePrices(data);
           },
         );
         ipc.of[monitorId].on(
           'arbs',
-          function(data: ArbV1Raw[]) {
-            executor.updateArbs(data.map(parseRawArbV1));
+          function (data: ArbV1Raw[]) {
+            // arbBuilder.updateArbs(data.map(parseRawArbV1));
           });
       },
     );
 
     async function test() {
-      // const mover = new MoveIBC(bot0Wallet, balanceMonitor);
-      // await mover.moveIBC(CHAIN.Stride, CHAIN.Osmosis, SwapToken.stJUNO, 'max');
-      // await mover.moveIBC(CHAIN.Osmosis, CHAIN.Secret, SwapToken.stJUNO, 'max', { waitAppear: true});
+      await balanceMonitor.waitForChainBalanceUpdate(CHAIN.Secret, SwapToken.SCRT, {
+        maxWaitTime: 240_000,
+        isWrapped: false,
+        isBalanceCheck: true
+      })
+      const mover = new MoveIBC(balanceMonitor);
+      let moveQ = await mover.createMoveIbcPlan({
+        amount: 'max',
+        fromChain: CHAIN.Injective,
+        toChain: CHAIN.Osmosis,
+        token: SwapToken.INJ,
+        amountMin: BigNumber.min(0.30)
+      })
+      let moveQ2 = await mover.createMoveIbcPlan({
+        amount: BigNumber(15),
+        fromChain: CHAIN.Osmosis,
+        toChain: CHAIN.Secret,
+        token: SwapToken.INJ,
+        amountMin: BigNumber.min(0.30)
+      })
+      if (!moveQ || !moveQ2) {
+        throw new Error('Nothing to test');
+      }
+      const mq = moveQ.concat(moveQ2);
+      logger.log(mq.map(p => p.toString()));
+      await Aigle.findSeries(mq, async op => {
+        let result = await op.execute(bot0Wallet, balanceMonitor);
+        if (!result.success) {
+          // exit on first error
+          logger.error(result.result);
+          return false;
+        }
+      })
     }
   }
 

@@ -2,10 +2,11 @@ import {IArbOperationExecuteResult, IOperationData, SecretSNIPOperationType} fro
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {Denom, SwapTokenMap} from '../ibc';
-import {CHAIN, getTokenDenomInfo} from '../ibc';
+import {CHAIN} from '../ibc';
 import {ArbOperationSequenced} from './aArbOperation';
 import {convertCoinToUDenomV2} from "../utils/denoms";
 import BigNumber from "bignumber.js";
+import {getGasFeeInfo} from "./utils";
 
 export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperationType> {
   constructor(data: IOperationData<SecretSNIPOperationType>, shouldLogInDetails: boolean = true) {
@@ -21,8 +22,8 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
       return {
         success: false,
         result: {
-          ...resolvedAmount,
-          message: `Cannot ${this.data.wrap ? 'wrap' : 'unwrap'} ${resolvedAmount.data} ${this.data.token}. Rason: ${resolvedAmount.reason}`
+          message: `Cannot ${this.data.wrap ? 'wrap' : 'unwrap'} ${resolvedAmount.data} ${this.data.token}. Reason: ${resolvedAmount.reason}`,
+          ...resolvedAmount
         }
       };
     }
@@ -35,12 +36,13 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
       result = await arbWallet.executeSecretContract({
         contractAddress: secretAddress.address, msg: {
           "deposit": {},
-        }, gasPrice: 0.015, gasLimit: 60_000,
+        }, gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low, gasLimit: 60_000,
         sentFunds: [{
           denom: denom,
           amount: amountString
         }]
       });
+      this.logger.log(result.tx)
     } else {
       this.logger.log(`Unwrap ${resolvedAmount} s${this.data.token}`.blue);
       result = await arbWallet.executeSecretContract({
@@ -50,8 +52,9 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
             "amount": amountString,
             "denom": denom
           }
-        }, gasPrice: 0.015, gasLimit: 60_000
+        }, gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low, gasLimit: 60_000
       });
+      this.logger.log(result.tx)
     }
     return {
       success: true,

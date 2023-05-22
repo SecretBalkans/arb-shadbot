@@ -6,13 +6,14 @@ import {IbcMoveAmount, IBCMoveCHAIN, MoveOperationType, SwapMoveOperationsType} 
 import _ from 'lodash';
 import {BalanceWaitOperation} from './BalanceWaitOperation';
 import {BalanceCheckOperation} from './BalanceCheckOperation';
-import {BridgeOperation} from './BridgeOperation';
+import {IBCTransferOperation} from './IBCTransferOperation';
 import {ArbOperation} from './aArbOperation';
 import {SecretSNIPOperation} from "./SecretSNIPOperation";
+import BigNumber from 'bignumber.js';
 
 export const MAX_IBC_FINISH_WAIT_TIME_DEFAULT = 120_000;
 
-export type ChainTokenBalanceResult = { isWrapped: boolean, amount: Amount, chain: CHAIN };
+export type ChainTokenBalanceResult = { isWrapped: boolean | 'both', amount: Amount, chain: CHAIN };
 export default class MoveIBC implements CanLog {
   logger: Logger;
 
@@ -29,38 +30,39 @@ export default class MoveIBC implements CanLog {
    * @param amountMin
    */
   async createMoveIbcPlan({
-                            originChain,
+                            fromChain,
                             toChain,
                             token,
                             amount,
                             amountMin,
                           }: {
-    originChain: IBCMoveCHAIN, toChain: CHAIN, token: SwapToken, amount: IbcMoveAmount | ArbOperation<SwapMoveOperationsType>, amountMin?: Amount
+    fromChain: IBCMoveCHAIN, toChain: CHAIN, token: SwapToken, amount: IbcMoveAmount | ArbOperation<SwapMoveOperationsType>, amountMin?: Amount
   }): Promise<ArbOperation<MoveOperationType>[] | false> {
-    let fromChain: CHAIN;
+    let effectiveFromChain: CHAIN;
     let isWrappedOriginBalance;
-    if (originChain === 'any') {
+    if (fromChain === 'any') {
       // Find the best chain (including wrapped on Secret) to move funds from
       let bestTokenBalance = this.findChainWithTokenBalance(token);
-      fromChain = bestTokenBalance.chain;
+      effectiveFromChain = bestTokenBalance.chain;
       isWrappedOriginBalance = bestTokenBalance.isWrapped;
-    } else if (originChain === CHAIN.Secret) {
+    } else if (fromChain === CHAIN.Secret) {
       // if we specifically move from secret, we check whether we have better wrapped or unwrapped balance
-      let bestSecretBalance = _.maxBy(this.getSecretChainBalances(token), amountPredicate) as ChainTokenBalanceResult;
-      fromChain = CHAIN.Secret;
+      let secretChainBalances = this.getSecretChainBalances(token);
+      let bestSecretBalance = _.maxBy(secretChainBalances, amountPredicate) as ChainTokenBalanceResult;
+      effectiveFromChain = CHAIN.Secret;
       isWrappedOriginBalance = bestSecretBalance.isWrapped
     } else {
       // otherwise from chain is not on secret
-      fromChain = originChain;
+      effectiveFromChain = fromChain;
       isWrappedOriginBalance = false;
     }
 
-    if (!fromChain) {
+    if (!effectiveFromChain) {
       this.logger.log(`No ${token} to move on any chain.`.blue);
       return false;
     }
 
-    if (fromChain === toChain) {
+     if (effectiveFromChain === toChain) {
       return [
         // Wrap if we found that the best balance is unwrapped on Secret
         ...(!isWrappedOriginBalance && toChain === CHAIN.Secret ? [new SecretSNIPOperation({
@@ -71,8 +73,7 @@ export default class MoveIBC implements CanLog {
             amountMax: amount,
             amountMin,
             isWrapped: false
-          })
-          ,
+          }),
           wrap: true
         }), new BalanceWaitOperation({
           chain: CHAIN.Secret,
@@ -91,26 +92,8 @@ export default class MoveIBC implements CanLog {
     }
     const assetNativeChain: CHAIN = getChainByChainId(getTokenDenomInfo(SwapTokenMap[token]).chainId);
 
-
-    let secretSnipOperationOnDestination = toChain === CHAIN.Secret ? [new SecretSNIPOperation({
-      token,
-      wrap: true,
-      amount: new BalanceWaitOperation({
-        chain: CHAIN.Secret,
-        token,
-        isWrapped: false
-      }),
-    }), new BalanceWaitOperation({
-      chain: toChain,
-      token,
-      isWrapped: true
-    })] : [new BalanceWaitOperation({
-      chain: toChain,
-      token,
-      isWrapped: false
-    })];
-
-    let secretSNIPOperationOnOrigin = isWrappedOriginBalance ? [new SecretSNIPOperation({
+    // TODO: better check for ics tokens instead only checking for AXLR chain
+    let secretSNIPOperationOnOrigin = isWrappedOriginBalance && assetNativeChain !== CHAIN.Axelar ? [new SecretSNIPOperation({
       token,
       unwrap: true,
       amount: new BalanceCheckOperation({
@@ -125,40 +108,67 @@ export default class MoveIBC implements CanLog {
       token,
       isWrapped: false
     })] : [];
+
+    let secretSnipOperationOnDestination = toChain === CHAIN.Secret && assetNativeChain !== CHAIN.Axelar? [new SecretSNIPOperation({
+      token,
+      wrap: true,
+      amount: new BalanceWaitOperation({
+        chain: CHAIN.Secret,
+        token,
+        isWrapped: false
+      }),
+    }), new BalanceWaitOperation({
+      chain: toChain,
+      token,
+      isWrapped: true
+    })] : [new BalanceWaitOperation({
+      chain: toChain,
+      token,
+      // TODO: we move Axelar tokens using ICS contract on Secret. better check for ics tokens
+      isWrapped: toChain === CHAIN.Secret && assetNativeChain === CHAIN.Axelar
+    })];
+
     let result: ArbOperation<MoveOperationType>[];
-    if (assetNativeChain === toChain || assetNativeChain === fromChain) {
-      // Move Native asset from/to it's own chain directly
-      result = [
-        ...secretSNIPOperationOnOrigin,
-        new BridgeOperation({
-          from: fromChain,
-          to: toChain,
-          token,
-          amount: new BalanceCheckOperation({
-            chain: fromChain,
-            token,
-            amountMax: amount,
-            amountMin,
-            isWrapped: false,
+    if (assetNativeChain !== toChain && assetNativeChain !== effectiveFromChain) {
+      /*if (assetNativeChain === CHAIN.Axelar) {
+        result = [
+          new AxelarBridgeOperation({
+            from: effectiveFromChain,
+            to: toChain,
+            amount: new BalanceCheckOperation({
+              token,
+              amountMax: amount,
+              chain: effectiveFromChain,
+              amountMin,
+              isWrapped: effectiveFromChain === CHAIN.Secret
+            }),
+            token
           }),
-        }),
-        ...secretSnipOperationOnDestination
-      ];
-    } else {
+          // For axelar transfers the amount comes in wrapped form
+          new BalanceWaitOperation({
+            chain: toChain,
+            token,
+            isWrapped: effectiveFromChain === CHAIN.Secret
+          })
+        ]
+      } else {*/
+      let shouldMoveWrapped = isWrappedOriginBalance && !secretSNIPOperationOnOrigin.length && effectiveFromChain === CHAIN.Secret;
       result = [
         ...secretSNIPOperationOnOrigin,
-        new BridgeOperation({
-          from: fromChain,
+        new IBCTransferOperation({
+          from: effectiveFromChain,
           to: assetNativeChain,
           token,
           amount: new BalanceCheckOperation({
             token,
             amountMax: amount,
-            chain: fromChain,
+            chain: effectiveFromChain,
             amountMin,
-            isWrapped: false
+            // if we didn't do secret snip (for example on axelar) we will use wrapped secret token
+            isWrapped: shouldMoveWrapped
           }),
-        }), new BridgeOperation({
+          isWrapped: shouldMoveWrapped
+        }), new IBCTransferOperation({
           from: assetNativeChain,
           to: toChain,
           amount: new BalanceWaitOperation({
@@ -167,21 +177,41 @@ export default class MoveIBC implements CanLog {
             isWrapped: false,
           }),
           token,
+          isWrapped: toChain === CHAIN.Secret && assetNativeChain === CHAIN.Axelar
         }),
         ...secretSnipOperationOnDestination];
+      // }
+    } else {
+      // Move Native asset from/to it's own chain directly
+      result = [
+        ...secretSNIPOperationOnOrigin,
+        new IBCTransferOperation({
+          from: effectiveFromChain,
+          to: toChain,
+          token,
+          amount: new BalanceCheckOperation({
+            chain: effectiveFromChain,
+            token,
+            amountMax: amount,
+            amountMin,
+            isWrapped: false,
+          }),
+        }),
+        ...secretSnipOperationOnDestination
+      ];
     }
     return _.compact(result);
   }
 
   getSecretChainBalances(token: SwapToken): ChainTokenBalanceResult[] {
     return [{
-      isWrapped: true,
       chain: CHAIN.Secret,
-      amount: this.balanceMonitor.getTokenAmount(CHAIN.Secret, SwapTokenMap[token], true)
+      isWrapped: true,
+      amount: this.balanceMonitor.getTokenAmount(CHAIN.Secret, SwapTokenMap[token], true) || BigNumber(0)
     }, {
       chain: CHAIN.Secret,
       isWrapped: false,
-      amount: this.balanceMonitor.getTokenAmount(CHAIN.Secret, SwapTokenMap[token], false)
+      amount: this.balanceMonitor.getTokenAmount(CHAIN.Secret, SwapTokenMap[token], false) || BigNumber(0)
     }]
   }
 
@@ -231,7 +261,7 @@ export default class MoveIBC implements CanLog {
       } else {
         return [{
           chain: chainCandidate,
-          amount: this.balanceMonitor.getTokenAmount(chainCandidate, token, false)
+          amount: this.balanceMonitor.getTokenAmount(chainCandidate, token, false) || BigNumber(0)
         }];
       }
     }) as unknown as ChainTokenBalanceResult[];
@@ -240,5 +270,5 @@ export default class MoveIBC implements CanLog {
 }
 
 function amountPredicate({amount}) {
-  return amount.toNumber()
+  return amount.toNumber();
 }

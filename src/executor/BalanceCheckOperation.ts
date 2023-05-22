@@ -7,13 +7,17 @@ import {
 } from './types';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
-import {Amount, SwapToken, SwapTokenMap} from '../ibc';
-import {CHAIN, getChainByChainId, getTokenDenomInfo} from '../ibc';
+import {Amount, CHAIN, getChainByChainId, getTokenDenomInfo, SwapToken, SwapTokenMap} from '../ibc';
 import BigNumber from 'bignumber.js';
 import {getGasFeeInfo} from './utils';
-import { ArbOperationSequenced} from './aArbOperation';
+import {ArbOperationSequenced} from './aArbOperation';
 
 export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOperationType> {
+  MINIMUM_CHAIN_NATIVE_AMOUNTS = {
+    [CHAIN.Secret]: 2.5,
+    [CHAIN.Injective]: 0.01,
+  };
+
   constructor(data: IOperationData<BalanceCheckOperationType>, shouldLogInDetails: boolean = true) {
     super(data, shouldLogInDetails);
   }
@@ -24,8 +28,8 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       isWrapped: this.data.isWrapped
     });
     let amountMax = this.data.amountMax;
-    // TODO: remove this hardcode of 0
-    let amountMin = this.data.amountMin ? BigNumber(0) || this.data.amountMin: null;
+    // TODO: use this hardcode of 0 if you want to do any testing despite what real arb says
+    let amountMin = this.data.amountMin ? /*BigNumber(0) ||*/ this.data.amountMin : null;
     if (amountMax !== 'max' && !(amountMax instanceof BigNumber)) {
       let resolvedAmount = await this.resolveArbOperationAmount({
         amount: amountMax,
@@ -50,11 +54,9 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       originChain: this.data.chain,
       asset: this.data.token,
       isWrapped: this.data.isWrapped,
-      // TODO: remove this artificial amountMax
       amountMax,
     });
 
-    // TODO: remove this artificial amountMin check
     if (!amountMin || amount.isGreaterThan(amountMin)) {
       return {
         success: true,
@@ -79,7 +81,7 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
   private ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER = 20;
 
   id(): string {
-    return `${this.data.chain}.${SwapTokenMap[this.data.token]}`;
+    return `${this.data.chain}.${this.data.isWrapped ? '(wrapped)' : ''}${SwapTokenMap[this.data.token]}`;
   }
 
   type(): string {
@@ -91,15 +93,15 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
     asset,
     amountMax,
     isWrapped,
-  }: { originChain: CHAIN, asset: SwapToken, amountMax: IbcMoveAmount, isWrapped: boolean }): Amount {
+  }: { originChain: CHAIN, asset: SwapToken, amountMax: IbcMoveAmount, isWrapped: boolean | 'both' }): Amount {
     const balanceAmount = balanceMonitor.getTokenAmount(originChain, SwapTokenMap[asset], isWrapped);
-    if (!balanceAmount) {
+    if (!balanceAmount || balanceAmount.isEqualTo(0)) {
       return BigNumber(0);
     }
     const gasFeeInfo = getGasFeeInfo(originChain);
     const assetNativeChain: CHAIN = getChainByChainId(getTokenDenomInfo(SwapTokenMap[asset]).chainId);
     let moveAmount: BigNumber;
-    const reserveAmount = BigNumber(gasFeeInfo.amount).multipliedBy(this.ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER);
+    const reserveAmount = BigNumber.maximum((this.MINIMUM_CHAIN_NATIVE_AMOUNTS)[assetNativeChain] || BigNumber(0), BigNumber(gasFeeInfo.amount).multipliedBy(this.ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER));
 
     if (amountMax === 'max') {
       moveAmount = balanceAmount;
@@ -118,7 +120,7 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       }
     }
     if (moveAmount.isGreaterThan(balanceAmount)) {
-      moveAmount = balanceAmount;
+      moveAmount = balanceAmount.minus(reserveAmount);
     }
     return moveAmount.isGreaterThan(0) ? moveAmount : BigNumber(0);
   }

@@ -22,7 +22,11 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   logger: Logger;
 
   protected constructor(public readonly data: IOperationData<T>, protected readonly shouldLogInDetails: boolean = true) {
-    this.logger = new Logger(`Operation-${this.type()}-${this.id()}`);
+    this.logger = new Logger(this.toString());
+  }
+
+  toString(): string {
+    return `OP-${this.type()}-${this.id()}`;
   }
 
   public execute<B extends boolean>(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: B, result: B extends true ? IOperationResult<T> : IFailingArbInfo }>;

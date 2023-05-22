@@ -40,14 +40,14 @@ export function getChainUrl(chain: CHAIN, rest = false) {
   return chainInfo ? rest ? chainInfo.rest : chainInfo.rpc : null;
 }
 
-type IBCChannel = Brand<string, 'IBCChannel'>;
+export type IBCChannel = Brand<string, 'IBCChannel'>;
 export type IBCResource = { channelId: string, chain: CHAIN, maxClockDrift: number };
 
 export class ArbWallet {
   public readonly config: ArbWalletConfig;
   private readonly CODE_HASH_CACHE = {};
   private readonly CONTRACT_MSG_CACHE = {};
-  private secretClient: SecretNetworkClient;
+  private secretClients: SecretNetworkClient[] = [];
   private readonly rpcClients: any = {};
   private readonly restClients: any = {};
   private readonly wallets: any = {};
@@ -63,7 +63,7 @@ export class ArbWallet {
   mapOfZonesData: any[];
   private isFetchingSecret: Boolean;
 
-  public async initSecretRegistry() {
+  public async initShadeRegistry() {
     await Promise.all([
       initTokens(),
       initPairsRaw(),
@@ -85,7 +85,7 @@ export class ArbWallet {
   } = {}): Promise<Amount | -1> {
     if (chain === CHAIN.Secret && asset !== SwapToken.SCRT) {
       const secretToken = this.getSecretAddress(asset);
-      return this.getSecretBalance(secretToken);
+      return (await this.getSecretBalancePromise({asset: secretToken})).promise;
     }
     let tokenDenomInfo;
     try {
@@ -268,13 +268,20 @@ export class ArbWallet {
     };
   };
 
-  public async getSecretNetworkClient(url?: string, chain: CHAIN = CHAIN.Secret): Promise<SecretNetworkClient> {
+  private SECRET_BALANCE_QUERY_PARALLEL_LIMIT = 9;
+
+  public async getSecretNetworkClient({
+                                        url,
+                                        chain = CHAIN.Secret,
+                                        parallelizeIndex
+                                      }: { url?: string, chain?: CHAIN, parallelizeIndex?: number } = {}): Promise<SecretNetworkClient> {
     url = url || getChainInfo(chain).rest;
-    if (!this.secretClient) {
+    let index = parallelizeIndex % this.SECRET_BALANCE_QUERY_PARALLEL_LIMIT;
+    if (!this.secretClients[index]) {
       const senderAddress = await this.getAddress(chain);
       const signer = await this.getSecretSigner();
       const getSecretPen = this.getSecretPen.bind(this);
-      this.secretClient = new SecretNetworkClient({
+      this.secretClients[index] = new SecretNetworkClient({
         url: url,
         wallet: {
           async signAmino(
@@ -328,7 +335,7 @@ export class ArbWallet {
       });
     }
 
-    return this.secretClient;
+    return this.secretClients[index];
   }
 
   public async getAddress(chain: CHAIN, suffix = '0'): Promise<string> {
@@ -348,8 +355,18 @@ export class ArbWallet {
    @param asset.decimals number
    @param asset.codeHash? string
    * */
-  public async getSecretBalance(asset: { address: SecretContractAddress, codeHash?: string, decimals: number }, noViewingKeySet = false): Promise<Amount> {
-    const client = await this.getSecretNetworkClient();
+  public async getSecretBalancePromise({
+                                         asset,
+                                         noViewingKeySet = false,
+                                         parallelizeIndex = 0
+                                       }: {
+    asset: { address: SecretContractAddress; codeHash?: string; decimals: number },
+    noViewingKeySet?: boolean,
+    parallelizeIndex?: number
+  }): Promise<{
+    promise: Promise<Amount>
+  }> {
+    const client = await this.getSecretNetworkClient({parallelizeIndex});
     const result = await this.querySecretContract(asset.address, {
       balance: {
         key: this.config.secretNetworkViewingKey,
@@ -357,24 +374,32 @@ export class ArbWallet {
       },
     }, asset.codeHash) as any;
     if (!noViewingKeySet && (_.isString(result) && result.includes('"unauthorized"')) || result.viewing_key_error?.msg === 'Wrong viewing key for this address or viewing key not set') {
-      let tx = await this.executeSecretContract({
-        contractAddress: asset.address, msg: {
-          set_viewing_key: {
-            key: this.config.secretNetworkViewingKey,
-          },
-        }, gasPrice: 0.0175, gasLimit: 175_000, waitForCommit: false
-      });
-      for (let i = 0; i < 60; i++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        let amount = await this.getSecretBalance(asset, true);
-        if (amount) {
-          return amount;
-        }
+      return {
+        promise: new Promise(async resolve => {
+          let tx = await this.executeSecretContract({
+            contractAddress: asset.address, msg: {
+              set_viewing_key: {
+                key: this.config.secretNetworkViewingKey,
+              },
+            }, gasPrice: 0.0175, gasLimit: 60_000, waitForCommit: false
+          });
+          this.logger.log('ViewingKey', tx.rawLog);
+          let amount;
+          for (let i = 0; i < 60; i++) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            let {promise} = await this.getSecretBalancePromise({asset: asset, noViewingKeySet: true});
+            amount = await promise;
+            if (amount) {
+              break;
+            }
+          }
+          return resolve(amount);
+        })
       }
-      this.logger.log('ViewingKey', tx.rawLog);
-      return this.getSecretBalance(asset);
     }
-    return result?.balance?.amount ? convertCoinFromUDenomV2(result?.balance?.amount, asset.decimals) : null;
+    return {
+      promise: new Promise(async resolve => resolve(result?.balance?.amount ? convertCoinFromUDenomV2(result?.balance?.amount, asset.decimals) : null))
+    }
   }
 
   /**
@@ -465,17 +490,33 @@ export class ArbWallet {
         return; // exit early while fetching early to avoid duplicating tasks
       } else {
         this.isFetchingSecret = true;
-        secretBalances = _.compact(await Aigle.mapSeries(Object.keys(SwapTokenMap), async (swapToken) => {
-          let token = SwapTokenMap[swapToken];
-          let secretTokenInfo = this.getSecretAddress(token);
-          try {
-            let balance = await this.getSecretBalance(secretTokenInfo);
-            return {token: SwapTokenMap[swapToken], denomInfo: getTokenDenomInfo(token, true), amount: balance}
-          } catch (err) {
-            this.logger.debugOnce(err.message);
-            return null
-          }
-        }));
+        let swapTokens = Object.keys(SwapTokenMap);
+        secretBalances = await Aigle.mapSeries(
+          await Aigle.mapLimit(swapTokens, this.SECRET_BALANCE_QUERY_PARALLEL_LIMIT,
+            async (swapToken) => {
+              let secretTokenInfo = this.getSecretAddress(swapToken as SwapToken);
+              try {
+                const {promise} = await this.getSecretBalancePromise({
+                  asset: secretTokenInfo
+                })
+                return {
+                  token: SwapTokenMap[swapToken],
+                  promise
+                }
+              } catch (err) {
+                this.logger.debugOnce('SecretBalance', err.message);
+                return {
+                  token: SwapTokenMap[swapToken],
+                  promise: new Promise<BigNumber>(resolve =>
+                    resolve(BigNumber(0)))
+                }
+              }
+            }
+          ), async ({token, promise}) => ({
+            token,
+            denomInfo: getTokenDenomInfo(SwapTokenMap[token], true),
+            amount: await promise
+          }));
         this.isFetchingSecret = false;
       }
     }
@@ -799,7 +840,6 @@ export class BalanceMap {
                                                                   token,
                                                                   denomInfo: {
                                                                     isWrapped,
-                                                                    decimals,
                                                                     chainDenom
                                                                   },
                                                                 }) => {
@@ -814,7 +854,7 @@ export class BalanceMap {
     }));
     _.forEach(pastBalanceMap?.tokenBalances, ({denomInfo: {chainDenom, isWrapped}, token, amount}) => {
       if (!_.find(this.tokenBalances, {token, denomInfo: {chainDenom: chainDenom, isWrapped}})) {
-        // if we do not have the past denom, then add it with a - indicating it dissapeared
+        // if we do not have the past denom, then add it with an - indicating it dissapeared
         newBalancesRaw.push({chainDenom: chainDenom, token, amount: amount.multipliedBy(-1), isWrapped});
       } else {
         // do nothing as we have already subtracted amounts that we have

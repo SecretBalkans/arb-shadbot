@@ -5,21 +5,21 @@ import {ArbOperation} from './aArbOperation';
 
 
 export type SwapOperationType = 'swap';
-export type BridgeOperationType = 'bridge';
+export type IBCOperationType = 'ibc';
 export type BalanceWaitOperationType = 'waitBalance';
 export type BalanceCheckOperationType = 'balanceCheck';
 export type SecretSNIPOperationType = 'secretSNIP';
 export type SwapMoveOperationsType = SwapOperationType | MoveOperationType;
-export type MoveOperationType = BridgeOperationType | BalanceWaitOperationType | BalanceCheckOperationType | SecretSNIPOperationType;
+export type MoveOperationType = IBCOperationType | BalanceWaitOperationType | BalanceCheckOperationType | SecretSNIPOperationType;
 export type IOperationData<T extends SwapMoveOperationsType> =
   T extends 'swap' ? SwapOperationData
-    : T extends 'bridge' ? BridgeOperationData
+    : T extends 'ibc' ? IBCOperationData
       : T extends 'waitBalance' ? BalanceWaitOperationData
         : T extends 'secretSNIP' ? SecretSNIPOperationData
         : BalanceCheckOperationData;
 export type IOperationResult<T extends SwapMoveOperationsType> =
   T extends 'swap' ? SwapOperationResult
-    : T extends 'bridge' ? BridgeOperationResult
+    : T extends 'ibc' ? IBCOperationResult
       : T extends 'waitBalance' ? BalanceWaitOperationResult
         : T extends 'secretSNIP' ? SecretSNIPOperationResult
         : BalanceCheckOperationResult;
@@ -58,14 +58,15 @@ export interface AmountOperationResult {
 export interface SwapOperationResult extends AmountOperationResult {
 }
 
-export interface BridgeOperationData {
+export interface IBCOperationData {
   from: CHAIN,
   to: CHAIN,
   amount: Amount | ArbOperation<SwapMoveOperationsType>,
   token: SwapToken
+  isWrapped?: boolean
 }
 
-export interface BridgeOperationResult extends AmountOperationResult{
+export interface IBCOperationResult extends AmountOperationResult{
 }
 
 
@@ -95,5 +96,5 @@ export interface SecretSNIPOperationData {
 }
 
 export interface SecretSNIPOperationResult extends AmountOperationResult {
-  isWrapped: boolean;
+  isWrapped: boolean | 'both';
 }

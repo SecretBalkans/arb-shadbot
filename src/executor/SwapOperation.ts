@@ -53,9 +53,10 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
     const receivedDenomInfo = getTokenBaseDenomInfo(this.token1);
     const slippage = 0.02;
 
-    let minReceivingAmountString = '1000' || convertCoinToUDenomV2(this.data.expectedReturn.multipliedBy(1 - slippage) || BigNumber(0.001), receivedDenomInfo.decimals).toFixed(0);
+    let minReceivingAmountString = convertCoinToUDenomV2(this.data.expectedReturn.multipliedBy(1 - slippage) || BigNumber(0.001), receivedDenomInfo.decimals).toFixed(0);
     // TODO: BigNumber(1) hardcoded swap amount to be able to repeat
     let bigNumberAmountResult = BigNumber.minimum(1, amount);
+    // let bigNumberAmountResult = amount;
     let sentAmountString =  convertCoinToUDenomV2(bigNumberAmountResult, tokenDenomInfo.decimals).toString().split('.')[0];
     this.logger.log(`Swap ${bigNumberAmountResult.toNumber()} (${sentAmountString}) ${this.token0} > ${this.token1} in ${this.data.dex}`);
     switch (this.data.dex) {
@@ -118,7 +119,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
         let result, lastMessage;
         try {
           if (msgs.length > 0) {
-            result = await client.signAndBroadcast(
+             result = await client.signAndBroadcast(
               sender,
               msgs,
               fee,
@@ -189,8 +190,8 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
                 'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
                 'padding': 'u3a9nScQ',
               },
-            }, gasPrice: 0.0195, gasLimit: 65e4 * (0.4 + apContractPath.length)
-          }, // TODO: see shade UI gas fee calculation based on hops
+            }, gasPrice: 0.025, gasLimit: 65e4 * (0.4 + apContractPath.length)
+          },
         );
         try {
           let findLast = _.findLast(tx.arrayLog, {key: "amount_out"});

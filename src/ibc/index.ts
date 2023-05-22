@@ -21,6 +21,7 @@ export enum CHAIN {
   Cosmos = 'Cosmos',
   Agoric= 'Agoric',
   Comdex= 'Comdex',
+  Persistence= 'Persistence',
 }
 
 export const SUPPORTED_CHAINS: CHAIN[] = [
@@ -33,6 +34,7 @@ export const SUPPORTED_CHAINS: CHAIN[] = [
   CHAIN.Juno,
   CHAIN.Agoric,
   CHAIN.Cosmos,
+  CHAIN.Persistence,
 ];
 
 
@@ -52,6 +54,7 @@ export function getChainInfo(chain: CHAIN): SimplifiedChainInfo {
   }
   return chainInfo;
 }
+
 const dexOriginChains: Record<DexProtocolName, CHAIN> = { osmosis: CHAIN.Osmosis, shade: CHAIN.Secret };
 export function getDexOriginChain(dex: DexProtocolName) {
   return dexOriginChains[dex];

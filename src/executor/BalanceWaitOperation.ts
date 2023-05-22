@@ -36,7 +36,7 @@ export class BalanceWaitOperation extends ArbOperation<BalanceWaitOperationType>
   }
 
   id(): string {
-    return `${this.data.chain}.${SwapTokenMap[this.data.token]}`;
+    return `${this.data.chain}.${this.data.isWrapped ? '(wrapped)' : ''}.${SwapTokenMap[this.data.token]}`;
   }
 
   type(): string {

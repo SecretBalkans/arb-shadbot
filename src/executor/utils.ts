@@ -14,6 +14,6 @@ export function getGasFeeInfo(chain: CHAIN, asRawString: boolean = false): { amo
     // ie. 100000....000000 so we divide by coin decimals
     amount = BigNumber(amount).dividedBy(10 ** feeCurrency.coinDecimals).toNumber();
   }
-  let stringAmount = BigNumber(amount).multipliedBy(10 ** feeCurrency.coinDecimals).toString();
-  return { feeCurrency, amount: asRawString ? stringAmount : amount };
+  return { feeCurrency, amount: !asRawString ? amount : BigNumber(amount).multipliedBy(10 ** feeCurrency.coinDecimals).toString()};
 }
+

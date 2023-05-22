@@ -12,7 +12,7 @@ export type NonArbedToken = Brand<string, 'NonArbedToken'>
 export type NoIBCToken = Brand<string, 'NoIBCToken'>
 export type PoolToken = Token | NonArbedToken | NoIBCToken;
 export enum SwapToken {
-  // SHD = 'SHD',
+  SHD = 'SHD',
   'USDC' = 'USDC',
   'USDT' = 'USDT',
   CMST = 'CMST',
@@ -29,6 +29,7 @@ export enum SwapToken {
   JUNO = 'JUNO',
   stJUNO = 'stJUNO',
   BLD = 'BLD',
+  stkATOM = 'stkATOM',
 }
 
 // noinspection JSUnusedLocalSymbols
@@ -37,21 +38,22 @@ export function isSwapToken(token: string): token is SwapToken {
 }
 
 export const SwapTokenMap: Record<SwapToken, Token> = {
-  // SHD: SwapToken.SHD as Token,
-  SILK: SwapToken.SILK as Token,
-  CMST: SwapToken.CMST as Token,
-  stkdSCRT: SwapToken.stkdSCRT as Token,
-  SCRT: SwapToken.SCRT as Token,
-  stATOM: SwapToken.stATOM as Token,
-  IST: SwapToken.IST as Token,
-  ATOM: SwapToken.ATOM as Token,
-  stOSMO: SwapToken.stOSMO as Token,
-  USDT: SwapToken.USDT as Token,
-  USDC: SwapToken.USDC as Token,
-  OSMO: SwapToken.OSMO as Token,
-  JUNO: SwapToken.JUNO as Token,
-  stJUNO: SwapToken.stJUNO as Token,
-  BLD: SwapToken.BLD as Token,
-  INJ: SwapToken.INJ as Token,
-  stINJ: SwapToken.stINJ as Token
+  [SwapToken.SHD]: 'SHD' as Token,
+  [SwapToken.SILK]: 'SILK' as Token,
+  [SwapToken.CMST]: 'CMST' as Token,
+  [SwapToken.stkdSCRT]: 'stkdSCRT' as Token,
+  [SwapToken.SCRT]: 'SCRT' as Token,
+  [SwapToken.stATOM]: 'stATOM' as Token,
+  [SwapToken.IST]: 'IST' as Token,
+  [SwapToken.ATOM]: 'ATOM' as Token,
+  [SwapToken.stOSMO]: 'stOSMO' as Token,
+  [SwapToken.USDT]: 'USDT' as Token,
+  [SwapToken.USDC]: 'USDC' as Token,
+  [SwapToken.OSMO]: 'OSMO' as Token,
+  [SwapToken.JUNO]: 'JUNO' as Token,
+  [SwapToken.stJUNO]: 'stJUNO' as Token,
+  [SwapToken.BLD]: 'BLD' as Token,
+  [SwapToken.INJ]: 'INJ' as Token,
+  [SwapToken.stINJ]: 'stINJ' as Token,
+  [SwapToken.stkATOM]: 'stkATOM' as Token
 };

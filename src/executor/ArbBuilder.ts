@@ -19,10 +19,7 @@ export default class ArbBuilder {
   logger: Logger;
   ARB_THRESHOLD: number = 0;
   deferredArbs: Record<string, ArbV1> = {};
-  failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {
-    // TODO: DISABLE AXELAR USDC ARB for demo
-    [`osmosis-shade_SCRT-USDC`]: true
-  };
+  failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {  };
   isWaitingForArb: boolean;
 
   constructor(public readonly arbWallet: ArbWallet, private readonly balanceMonitor: BalanceMonitor) {
@@ -92,7 +89,7 @@ export default class ArbBuilder {
     }
     this.currentArb = new ArbExecutor(bestArb);
     this.logger.log(`Start arb ${this.currentArb.id} for win $${this.getArbWinInUsdAndEstimateBridgeCost(bestArb)}`.green.underline);
-    this.currentArb.execute(this.arbWallet, this.balanceMonitor).then(this.finishArb.bind(this));
+    this.currentArb.executeCurrentArb(this.arbWallet, this.balanceMonitor).then(this.finishArb.bind(this));
   }
 
   private async finishArb() {
@@ -126,7 +123,7 @@ export default class ArbBuilder {
     const getChainBridgeCost = (chain: CHAIN) => {
       const {feeCurrency, amount} = getGasFeeInfo(chain);
       // TODO: remove this hardcode of 0 bridge introduced while testing
-      return BigNumber(0) || (amount as number) * this.getPrice(feeCurrency.coinDenom as Token);
+      return /*BigNumber(0) || */(amount as number) * this.getPrice(feeCurrency.coinDenom as Token);
     };
 
     function getDexBridgeCost(dex: DexProtocolName) {

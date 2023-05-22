@@ -52,6 +52,17 @@ export async function fetchTimeout(url: string, options = {}, timeout = 14000): 
     ]))?.text();
     return JSON.parse(text);
   } catch (err) {
+    // noinspection JSUnusedAssignment
     throw new Error(`Fetch error: ${safeJsonStringify({ url, options, text, message: (err as any).message })}`);
+  }
+}
+
+export function addressSafeString(address: string): string {
+  try {
+    let slice = [...address.match(/([a-z]+)([a-z1-9]{2}).*([a-z1-9]{1,})$/)].slice(1, 5);
+    slice[2] = `******`;
+    return slice.join('');
+  } catch (err) {
+    return '';
   }
 }

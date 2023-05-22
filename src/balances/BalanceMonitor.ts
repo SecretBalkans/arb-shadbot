@@ -56,7 +56,7 @@ export function subscribeBalances(arb: ArbWallet): Observable<BalanceUpdate> {
             balances,
             diff: balances,
           }));
-        }).catch(err => logger.error(err.message, chain === CHAIN.Secret ? chainInfo.rest : chainInfo.rpc));
+        }).catch(err => logger.error('GetBalances', err.message, chain === CHAIN.Secret ? chainInfo.rest : chainInfo.rpc));
       }, err => obs.error(err));
     });
   }).pipe(filter((newBlockBalanceMap: BalanceUpdate) => {
@@ -93,11 +93,11 @@ export class BalanceMonitor implements CanLog {
 
   public readonly events = new EventEmitter();
 
-  public getTokenAmount(chain: CHAIN, token: Token, isWrapped: boolean): Amount {
-    return this.getTokenInfoInternal(this.balances[chain]?.tokenBalances, token, isWrapped)?.amount || BigNumber(0);
+  public getTokenAmount(chain: CHAIN, token: Token, isWrapped: boolean | 'both'): Amount | false {
+    return this.getTokenInfoInternal(this.balances[chain]?.tokenBalances, token, isWrapped)?.amount;
   }
 
-  public getTokenInfoInternal<T extends {token: P, amount: P, denomInfo: K}, P extends string | BigNumber, K extends {decimals: number, isWrapped?: boolean}>(balances: T[], token: string, isWrapped: boolean): T | undefined {
+  public getTokenInfoInternal<T extends {token: P, amount: P, denomInfo: K}, P extends string | BigNumber, K extends {decimals: number, isWrapped?: boolean}>(balances: T[], token: string, isWrapped: boolean | 'both'): T | undefined {
     return _.find(balances, {token, denomInfo: {isWrapped}}) as any as T | undefined;
   }
 
@@ -153,19 +153,24 @@ export class BalanceMonitor implements CanLog {
   public async waitForChainBalanceUpdate(chain: CHAIN, token: SwapToken, {
     maxWaitTime = MAX_IBC_FINISH_WAIT_TIME_DEFAULT,
     isWrapped = false,
-    isBalanceCheck = false,
+    isBalanceCheck = false
+  }: {
+    maxWaitTime?:number,
+    isWrapped?: boolean,
+    isBalanceCheck?: boolean
   } = {}): Promise<Amount | false> {
     const swapToken = SwapTokenMap[token];
-    const existingBalance = this.getTokenAmount(chain, SwapTokenMap[token], isWrapped);
-    if (isBalanceCheck) {
-      return existingBalance;
+    let tokenAmount = this.getTokenAmount(chain, swapToken, isWrapped);
+     if (isBalanceCheck) {
+      return tokenAmount || BigNumber(0);
     }
+
     // TODO: for secret send a message to Monitor to keep looking
     //  only for a single token to avoid waiting too long and wait for that message
     return Promise.race([
       new Promise<false>(resolve => setTimeout(() => resolve(false), maxWaitTime)),
       new Promise<Amount>(resolve => {
-        this.logger.log(`Waiting for ${isBalanceCheck ? 'balance' : 'transfer'} of ${token} to ${chain}...`.blue);
+        this.logger.log(`Waiting for ${isBalanceCheck ? 'balance' : 'deposit'} of ${isWrapped ? 's': ''}${token} on ${chain}...`.blue);
         const listener = (balanceUpdate: SerializedBalanceUpdate) => {
           const prop = isBalanceCheck ? 'balances' : 'diff';
           if (balanceUpdate.chain === chain && BigNumber(this.getTokenInfoInternal(balanceUpdate[prop] as SerializedBalances, swapToken,isWrapped)?.amount).isGreaterThan(0)) {

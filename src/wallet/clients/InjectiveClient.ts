@@ -10,7 +10,7 @@ import {
 import {fromBase64} from "secretjsbeta";
 
 export default class InjectiveClient {
-  private restEndpoint: string;
+  public restEndpoint: string;
   private readonly injectiveAddress: any;
   public readonly publicAddress: Address;
   private readonly chainId: string;

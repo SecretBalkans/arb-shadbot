@@ -9,6 +9,7 @@ import MoveIBC from "./MoveIBC";
 import {CHAIN, getDexOriginChain} from "../ibc";
 import {SwapOperation} from "./SwapOperation";
 import {BalanceWaitOperation} from "./BalanceWaitOperation";
+import BigNumber from "bignumber.js";
 
 export class ArbExecutor {
   public failedReason: IFailingArbInfo;
@@ -20,10 +21,14 @@ export class ArbExecutor {
     return this.arb.id;
   }
 
-  async execute(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<void> {
+  async executeCurrentArb(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<void> {
     const operationsQ = await this.getOperationsQueue(balanceMonitor);
     // Print plan
     // this.logger.log(`Plan move max ${token} from ${isWrappedOriginBalance ? 's' : ''}${fromChain} to ${toChain === CHAIN.Secret ? 's' : ''}${toChain} using single IBC tx.`.blue);
+    await this.executeOperationsQ(operationsQ, arbWallet, balanceMonitor);
+  }
+
+  private async executeOperationsQ(operationsQ: ArbOperation<SwapMoveOperationsType>[], arbWallet: ArbWallet, balanceMonitor: BalanceMonitor) {
     await Aigle.findSeries(operationsQ, async op => {
       let result = await op.execute(arbWallet, balanceMonitor);
       if (!result.success) {
@@ -43,7 +48,7 @@ export class ArbExecutor {
     const dexChain0 = getDexOriginChain(this.arb.dex0);
     const dexChain1 = getDexOriginChain(this.arb.dex1);
     const preparationPlan = await moveIbc.createMoveIbcPlan({
-      originChain: 'any',
+      fromChain: 'any',
       toChain: dexChain0,
       token: this.arb.token0,
       amount: this.arb.amountIn,
@@ -56,13 +61,13 @@ export class ArbExecutor {
     let swapOperation0 = new SwapOperation({
       dex: this.arb.dex0,
       swapTokenSent: this.arb.token0,
-      expectedReturn: undefined, // TODO: provide calculation fn to be called with amount internally
+      expectedReturn: BigNumber(1), // TODO: provide calculation fn to be called with amount internally
       route: this.arb.route0,
       swapTokenReceived: this.arb.token1,
       tokenAmountIn: preparationPlan[preparationPlan.length - 1],
     });
     const bridgePlan = await moveIbc.createMoveIbcPlan({
-      originChain: dexChain0,
+      fromChain: dexChain0,
       toChain: dexChain1,
       token: this.arb.token1,
       amount: swapOperation0,
@@ -78,7 +83,7 @@ export class ArbExecutor {
         dex: this.arb.dex1,
         swapTokenSent: this.arb.token1,
         route: this.arb.route1,
-        expectedReturn: undefined, // TODO: provide calculation fn to be called with amount internally
+        expectedReturn: BigNumber(1), // TODO: provide calculation fn to be called with amount internally
         swapTokenReceived: this.arb.token0,
         tokenAmountIn: bridgePlan[bridgePlan.length - 1],
       }),

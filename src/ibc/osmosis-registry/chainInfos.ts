@@ -114,7 +114,7 @@ const chainInfos = (
           : 'https://www.mintscan.io/osmosis/txs/{txHash}'),
     },
     {
-      rpc: 'https://rpc-cosmoshub.pupmos.network/',
+      rpc: 'https://cosmos-rpc.easy2stake.com/',
       rest: 'https://lcd.cosmos.dragonstake.io',
       chainId: 'cosmoshub-4',
       chainName: 'Cosmos Hub',
@@ -133,7 +133,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.0021,
+            low: 0.0025,
             average: 0.025,
             high: 0.03,
           },
@@ -195,9 +195,9 @@ const chainInfos = (
       explorerUrlToTx: 'https://finder.terra.money/columbus-5/tx/{txHash}',
     },
     {
-      rpc: 'https://rpc.secret.express',
-      // rest: 'https://lcd-secret.whispernode.com:443',
+      rpc: 'https://1rpc.io/scrt-rpc',
       rest: "https://lcd.secret.express",
+      // rest: 'https://secretnetwork-api.lavenderfive.com:443',
       // rest: "https://api.scrt.network/",
       chainId: 'secret-4',
       chainName: 'Secret Network',
@@ -395,8 +395,8 @@ const chainInfos = (
       features: ['ibc-transfer', 'ibc-go'],
     },
     {
-      rpc: 'https://rpc-persistence.keplr.app',
-      rest: 'https://lcd-persistence.keplr.app',
+      rpc: 'https://persistence-rpc.quantnode.tech',
+      rest: 'https://persistence-lcd.quantnode.tech',
       chainId: 'core-1',
       chainName: 'Persistence',
       bip44: {
@@ -415,7 +415,7 @@ const chainInfos = (
           isFeeCurrency: true,
           gasPriceStep: {
             low: 0,
-            average: 0.025,
+            average: 0,
             high: 0.04,
           },
         },
@@ -1391,8 +1391,8 @@ const chainInfos = (
       explorerUrlToTx: 'https://cyb.ai/network/bostrom/tx/{txHash}',
     },
     {
-      rpc: 'https://rpc-comdex.goldenratiostaking.net',
-      rest: 'https://rest.comdex.one',
+      rpc: 'https://rpc-comdex.carbonZERO.zone:443',
+      rest: 'https://comdex-api.lavenderfive.com/',
       chainId: 'comdex-1',
       chainName: 'Comdex',
       bip44: {
@@ -2548,7 +2548,7 @@ const chainInfos = (
       explorerUrlToTx: 'https://explorer.cudos.org/transactions/{txHash}',
     },
     {
-      rpc: 'https://agoric.rpc.kjnodes.com',
+      rpc: 'https://rpc-agoric-01.stakeflow.io',
       rest: 'https://api-agoric-01.stakeflow.io',
       chainId: 'agoric-3',
       chainName: 'Agoric',
@@ -3366,10 +3366,10 @@ const chainInfos = (
 chainInfos.push({
   rpc: IS_TESTNET
     ? 'https://axelartest-rpc.quickapi.com/'
-    : 'https://axelar-rpc.quantnode.tech/', // source: https://docs.axelar.dev/resources
+    : 'https://rpc.axelar.bh.rocks', // source: https://docs.axelar.dev/resources
   rest: IS_TESTNET
     ? 'https://axelartest-lcd.quickapi.com/'
-    : 'https://axelar-lcd.quantnode.tech/',
+    : 'https://api.axelar.bh.rocks/',
   chainId: IS_TESTNET ? 'axelar-testnet-lisbon-3' : 'axelar-dojo-1',
   chainName: 'Axelar',
   bip44: {
@@ -3588,8 +3588,8 @@ chainInfos.push({
       high: 0.2,
     }
     : {
-      low: 0.007,
-      average: 0.007,
+      low: 0.0025,
+      average: 0.003,
       high: 0.01,
     },
   features: ['ibc-transfer', 'ibc-go'],
