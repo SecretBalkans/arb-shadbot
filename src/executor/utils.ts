@@ -2,8 +2,9 @@ import { CHAIN, ChainCurrency, getChainInfo } from '../ibc';
 import BigNumber from 'bignumber.js';
 const GAS_FEE_STEP: 'low' | 'average' | 'high' = 'low';
 
-export function getGasFeeInfo<B extends boolean>(chain: CHAIN, asRawString?: B): { amount: B extends true ? string : number, feeCurrency: ChainCurrency };
-export function getGasFeeInfo(chain: CHAIN, asRawString: boolean = false): { amount: string | number, feeCurrency: ChainCurrency } {
+export function getGasFeeInfo<B extends boolean>(chain: CHAIN, asRawString: B): { amount: B extends true ? string : number, feeCurrency: ChainCurrency };
+export function getGasFeeInfo<B extends boolean>(chain: CHAIN): { amount: number, feeCurrency: ChainCurrency };
+export function getGasFeeInfo(chain: CHAIN, asRawString= false): { amount: string | number, feeCurrency: ChainCurrency } {
   const chainInfo = getChainInfo(chain);
   const feeCurrency = chainInfo.currencies[0];
 
@@ -14,6 +15,6 @@ export function getGasFeeInfo(chain: CHAIN, asRawString: boolean = false): { amo
     // ie. 100000....000000 so we divide by coin decimals
     amount = BigNumber(amount).dividedBy(10 ** feeCurrency.coinDecimals).toNumber();
   }
-  return { feeCurrency, amount: !asRawString ? amount : BigNumber(amount).multipliedBy(10 ** feeCurrency.coinDecimals).toString()};
+  return { feeCurrency, amount: !asRawString ? amount : BigNumber(amount).multipliedBy(10 ** feeCurrency.coinDecimals).toFixed(0)};
 }
 

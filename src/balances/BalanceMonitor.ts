@@ -5,13 +5,13 @@ import cosmosObserver from '../wallet/CosmosObserver';
 import {ArbWallet, BalanceMap, SerializedBalances} from '../wallet/ArbWallet';
 import _ from 'lodash';
 import {Logger} from '../utils';
-import {Amount, SwapToken, SwapTokenMap, Token} from '../ibc';
 import EventEmitter from 'events';
 import BigNumber from 'bignumber.js';
-import {convertCoinFromUDenomV2} from '../utils/denoms';
 import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from '../executor/MoveIBC';
 import {execute} from "../graphql/gql-execute";
 import gql from 'graphql-tag';
+import {Amount, SwapToken, SwapTokenMap, Token} from "../executor/build-dex/dexSdk";
+import { convertCoinFromUDenomV2 } from '../executor/build-dex/utils';
 
 export interface SerializedBalanceUpdate {
   chain: CHAIN,

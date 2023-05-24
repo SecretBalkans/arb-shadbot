@@ -2,7 +2,7 @@ import {getFetchTimeout, Logger} from '../utils';
 import {Observable} from 'zen-observable-ts';
 import _ from 'lodash';
 import {ChainInfos} from '../ibc';
-import {Token} from '../ibc/dexTypes';
+import {Token} from "../executor/build-dex/dex/types/dex-types";
 
 const logger = new Logger('Prices');
 let pricesObservablePromise;

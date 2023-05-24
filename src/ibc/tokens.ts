@@ -2,8 +2,15 @@ import { Logger } from '../utils';
 import { ChainInfos } from './osmosis-registry/chainInfos';
 import { IBCAsset, OsmoIBCAssetInfos } from './osmosis-registry/ibcAssets';
 import _ from 'lodash';
-import { Denom, NoIBCToken, NonArbedToken, SwapToken, SwapTokenMap, Token } from './dexTypes';
-import { makeIBCMinimalDenom } from '../utils/denoms';
+import {
+  Denom,
+  NoIBCToken,
+  NonArbedToken,
+  SwapToken,
+  SwapTokenMap,
+  Token
+} from "../executor/build-dex/dex/types/dex-types";
+import {makeIBCMinimalDenom} from "../executor/build-dex/utils";
 
 const logger = new Logger('Tokens');
 

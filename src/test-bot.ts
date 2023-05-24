@@ -1,17 +1,21 @@
 import {BalanceMonitor, BalanceUpdate, SerializedBalanceUpdate, subscribeBalances} from './balances/BalanceMonitor';
-import {CHAIN, SUPPORTED_CHAINS, SwapToken} from './ibc';
+import {CHAIN, SUPPORTED_CHAINS} from './ibc';
 import {Logger} from './utils';
 import ipc from 'node-ipc';
 import colors from '@colors/colors';
 import cluster from 'cluster';
 import {Prices, subscribePrices} from './prices/prices';
 import {ArbWallet} from './wallet/ArbWallet';
-import {ArbV1Raw, subscribeLiveArb, toRawArbV1} from './monitorGqlClient';
+import {subscribeLiveArb} from './monitorGqlClient';
 import ArbBuilder from './executor/ArbBuilder';
 import config from './config';
 import MoveIBC from "./executor/MoveIBC";
 import BigNumber from "bignumber.js";
 import Aigle from "aigle";
+import {SwapToken} from "./executor/build-dex/dex/types/dex-types";
+import {ArbV1WinRaw} from "./executor/types";
+
+const IS_TEST = 0;
 
 colors.enable();
 
@@ -23,9 +27,10 @@ ipc.config.logInColor = false; //default
 ipc.config.logDepth = 1; //default
 
 const monitorId = 'BalanceMonitor';
+let worker;
 
 function spawnWorker() {
-  let worker = cluster.fork();
+  worker = cluster.fork();
   logger.log('Spawning bot process ...'.yellow);
   worker.on('error', (err) => {
     logger.log(`Worker ${worker.id} error`.red, err);
@@ -59,13 +64,13 @@ const bot0Wallet = new ArbWallet({
   }
 
   if (cluster.isPrimary) {
-    let prices, lastArbs;
+    let prices, lastArbs: ArbV1WinRaw[];
     logger = new Logger('BalanceMonitor');
     ipc.config.logger = (msg) => logger.log(msg.gray);
 
     ipc.config.id = monitorId;
     ipc.config.retry = 1000;
-    const workerGetter = spawnWorker();
+
     let botSocket;
     let loggerInitialBalanceUpdate = {};
     let initialBalances: Record<string, BalanceUpdate> = {};
@@ -98,7 +103,7 @@ const bot0Wallet = new ArbWallet({
     ipc.server.start();
 
     subscribeLiveArb().subscribe((arbs) => {
-      lastArbs = arbs.map(toRawArbV1);
+      lastArbs = arbs;
       if (botSocket) {
         ipc.server.emit(
           botSocket,
@@ -108,6 +113,10 @@ const bot0Wallet = new ArbWallet({
 
     function logBalanceUpdate(balanceUpdate: BalanceUpdate) {
       const chain = balanceUpdate.chain;
+      if (chain === CHAIN.Secret && !worker) {
+        // Wait for Secret chain to update before spawning a worker.
+        spawnWorker();
+      }
       if (botSocket) {
         logger.log(`Balance ${chain} = ${balanceUpdate.diff.toString()}`.cyan);
       } else if (!loggerInitialBalanceUpdate[chain]) {
@@ -143,7 +152,7 @@ const bot0Wallet = new ArbWallet({
     ipc.config.retry = 1000;
     logger = new Logger(`Bot#${workerId}`);
     ipc.config.logger = (msg) => logger.log(msg.gray);
-    logger.log(`Started. Will connect to ${monitorId}.`);
+    logger.log(`Started. Will connect to #${monitorId}.`);
     const balanceMonitor = new BalanceMonitor();
     const arbBuilder = new ArbBuilder(bot0Wallet, balanceMonitor);
     balanceMonitor.enableLocalDBUpdates();
@@ -151,7 +160,7 @@ const bot0Wallet = new ArbWallet({
     ipc.connectTo(
       monitorId,
       function () {
-        setTimeout(() => {
+        IS_TEST && setTimeout(() => {
           test().catch(err => {
             logger.error(err);
             debugger;
@@ -171,18 +180,13 @@ const bot0Wallet = new ArbWallet({
         );
         ipc.of[monitorId].on(
           'arbs',
-          function (data: ArbV1Raw[]) {
-            // arbBuilder.updateArbs(data.map(parseRawArbV1));
+          function (data: ArbV1WinRaw[]) {
+            !IS_TEST && arbBuilder.updateArbs(data);
           });
       },
     );
 
     async function test() {
-      await balanceMonitor.waitForChainBalanceUpdate(CHAIN.Secret, SwapToken.SCRT, {
-        maxWaitTime: 240_000,
-        isWrapped: false,
-        isBalanceCheck: true
-      })
       const mover = new MoveIBC(balanceMonitor);
       let moveQ = await mover.createMoveIbcPlan({
         amount: 'max',

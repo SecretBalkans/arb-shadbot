@@ -1,7 +1,12 @@
-import {BalanceWaitOperationType, FailReasons, IArbOperationExecuteResult, IOperationData,} from './types';
+import {
+  BalanceWaitOperationType,
+  FailReasons,
+  IArbOperationExecuteResult,
+  IOperationData,
+  SwapTokenMap,
+} from './types';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
-import {SwapTokenMap} from '../ibc';
 import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from './MoveIBC';
 import {ArbOperation} from './aArbOperation';
 import BigNumber from "bignumber.js";
@@ -36,7 +41,7 @@ export class BalanceWaitOperation extends ArbOperation<BalanceWaitOperationType>
   }
 
   id(): string {
-    return `${this.data.chain}.${this.data.isWrapped ? '(wrapped)' : ''}.${SwapTokenMap[this.data.token]}`;
+    return `${this.data.chain}_${this.data.isWrapped ? '(wrapped).' : ''}${SwapTokenMap[this.data.token]}`;
   }
 
   type(): string {

@@ -1,16 +1,16 @@
 import {
+  Amount,
   FailReasons,
   IArbOperationExecuteResult,
   IFailingArbInfo,
   IOperationData,
   IOperationResult,
-  SwapMoveOperationsType
+  SwapMoveOperationsType, SwapToken
 } from './types';
-import {Logger} from '../utils';
+import {Logger, safeJsonStringify} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import BigNumber from "bignumber.js";
-import {Amount, SwapToken} from "../ibc";
 
 export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   private _result: { success: boolean; result: IArbOperationExecuteResult<T>; };
@@ -41,7 +41,7 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
       return {
         success: false,
         result: {
-          internal: this._result?.result,
+          internal: safeJsonStringify(err),
           data: err.message as string,
           reason: FailReasons.Unhandled
         }
@@ -68,7 +68,7 @@ export abstract class ArbOperationSequenced<T extends SwapMoveOperationsType> ex
     token: SwapToken,
   }, arbWallet, balanceMonitor): Promise<Amount | IFailingArbInfo> {
     let resolvedAmount, arbOperation;
-    if (amount instanceof BigNumber) {
+    if (BigNumber.isBigNumber(amount)) {
       resolvedAmount = amount;
     } else {
       arbOperation = await amount.execute(arbWallet, balanceMonitor);

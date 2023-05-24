@@ -21,6 +21,7 @@
   ],
   "exclude": [
     "build",
+    "src/executor/build-dex",
     "node_modules",
     ".secrets.js"
   ]

@@ -7,7 +7,7 @@
   },
   "rulesDirectory": [],
   "linterOptions": {
-    "exclude": ["**/*.excl.ts"]
+    "exclude": ["**/*.excl.ts", "src/executor/build-dex"]
   }
 }
 

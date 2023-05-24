@@ -1,8 +1,15 @@
-import {Amount, DexProtocolName, SwapToken} from '../ibc';
 import BigNumber from 'bignumber.js';
 import {CHAIN} from '../ibc';
 import {ArbOperation} from './aArbOperation';
+import {
+  Amount,
+  DexProtocolName,
+  SwapToken,
+  ArbV1,
+  Route, ArbV1Raw,
+} from './build-dex/dexSdk';
 
+export * from '../executor/build-dex/dex/types/dex-types';
 
 export type SwapOperationType = 'swap';
 export type IBCOperationType = 'ibc';
@@ -43,12 +50,11 @@ export interface IFailingArbInfo {
 }
 
 export type SwapOperationData = {
-  swapTokenSent: SwapToken,
+  tokenSent: SwapToken,
   tokenAmountIn: Amount | ArbOperation<SwapMoveOperationsType>,
-  expectedReturn: Amount, // TODO: should calculate internally based on swaps if not provided explicitly
-  swapTokenReceived: SwapToken,
+  tokenReceived: SwapToken,
   dex: DexProtocolName,
-  route: any
+  route: Route<DexProtocolName>
 };
 
 export interface AmountOperationResult {
@@ -97,4 +103,17 @@ export interface SecretSNIPOperationData {
 
 export interface SecretSNIPOperationResult extends AmountOperationResult {
   isWrapped: boolean | 'both';
+}
+
+export interface ArbV1WinRaw extends ArbV1Raw {
+  amount_win: number;
+}
+
+export interface ArbV1Win extends ArbV1<BigNumber> {
+  amountWin: BigNumber;
+}
+
+export interface ArbV1WinCost extends ArbV1Win {
+  bridgeCost: BigNumber;
+  winUsd: BigNumber;
 }

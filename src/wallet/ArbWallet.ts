@@ -14,13 +14,8 @@ import _ from 'lodash';
 
 import {CHAIN, getChainByChainId, getChainInfo, getTokenDenomInfo, SecretContractAddress} from '../ibc';
 import {DenomInfo} from '../ibc/tokens';
-import {Amount, Denom, IBCHash, isSwapToken, SwapToken, SwapTokenMap, Token} from '../ibc';
 import {CosmWasmClient} from '@cosmjs/cosmwasm-stargate';
 import {fetchTimeout, Logger} from '../utils';
-import {initPairsRaw, initTokens} from '../ibc/shade-resgistry/shadeRest';
-import {getShadeTokenBySymbol} from '../ibc/shade-resgistry/tokens';
-import {convertCoinFromUDenomV2, convertCoinToUDenomV2, makeIBCMinimalDenom} from '../utils/denoms';
-import {Brand} from '../ts';
 import Aigle from 'aigle';
 import BigNumber from 'bignumber.js';
 import path from 'path';
@@ -29,11 +24,19 @@ import {SerializedBalanceUpdate} from '../balances/BalanceMonitor';
 import {accountFromAnyStrideSupport} from './customAccountParser';
 import {ArbWalletConfig} from './types';
 import InjectiveClient from "./clients/InjectiveClient";
+import {Amount, Brand, Denom, isSwapToken, SwapToken, SwapTokenMap, Token} from '../executor/types';
+import {
+  convertCoinFromUDenomV2,
+  convertCoinToUDenomV2,
+  IBCHash,
+  makeIBCMinimalDenom
+} from "../executor/build-dex/utils";
+import {initShadeTokens, getPairsRaw} from "../executor/build-dex/dex/shade/shade-api-utils";
+import { getShadeTokenBySymbol } from '../executor/build-dex/dexSdk';
 
 const logger = new Logger('ArbWallet');
 
 export const swapTypeUrlOsmo = '/osmosis.gamm.v1beta1.MsgSwapExactAmountIn';
-
 
 export function getChainUrl(chain: CHAIN, rest = false) {
   const chainInfo = getChainInfo(chain);
@@ -65,8 +68,8 @@ export class ArbWallet {
 
   public async initShadeRegistry() {
     await Promise.all([
-      initTokens(),
-      initPairsRaw(),
+      initShadeTokens(),
+      getPairsRaw(),
     ]);
   }
 
@@ -268,7 +271,7 @@ export class ArbWallet {
     };
   };
 
-  private SECRET_BALANCE_QUERY_PARALLEL_LIMIT = 9;
+  private SECRET_BALANCE_QUERY_PARALLEL_LIMIT = 5;
 
   public async getSecretNetworkClient({
                                         url,
@@ -383,7 +386,7 @@ export class ArbWallet {
               },
             }, gasPrice: 0.0175, gasLimit: 60_000, waitForCommit: false
           });
-          this.logger.log('ViewingKey', tx.rawLog);
+          this.logger.log('ViewingKey', asset.address, tx.rawLog || tx);
           let amount;
           for (let i = 0; i < 60; i++) {
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -521,7 +524,8 @@ export class ArbWallet {
       }
     }
     const balancesRaw = await rpcClient.getAllBalances(address);
-    return new BalanceMap(chain, [...secretBalances, ...this.parseTokenBalances(chain, balancesRaw as BalancesRaw)]);
+    let tokenBalances = [...secretBalances, ...this.parseTokenBalances(chain, balancesRaw as BalancesRaw)];
+    return new BalanceMap(chain, tokenBalances);
   }
 
   parseTokenBalances(chain: CHAIN, balancesRaw: BalancesRaw): TokenBalanceWithDenomInfo[] {
@@ -801,10 +805,7 @@ export type TokenBalanceWithDenomInfo = { token: SwapToken, amount: Amount, deno
 export type SerializedBalances = { token: string, amount: string, denomInfo: DenomInfo }[];
 
 export class BalanceMap {
-  tokenBalances: TokenBalanceWithDenomInfo[] = [];
-
-  constructor(public readonly chain: CHAIN, tokenBalances: TokenBalanceWithDenomInfo[]) {
-    this.tokenBalances = tokenBalances;
+  constructor(public readonly chain: CHAIN, public readonly tokenBalances: TokenBalanceWithDenomInfo[]) {
   }
 
   static fromSerializedUpdate(balanceUpdate: SerializedBalanceUpdate): BalanceMap {

@@ -1,15 +1,14 @@
 import { getChainInfoByApproxName, SimplifiedChainInfo } from './osmosis-registry/chainInfos';
 import _ from 'lodash';
-import { Brand } from '../ts';
 import { Logger } from '../utils';
-import { Denom, DexProtocolName, Token } from './dexTypes';
 import { DenomInfo } from './tokens';
+import {Brand, Denom, DexProtocolName, Token} from "../executor/build-dex/dex/types/dex-types";
 
 const logger = new Logger('IbcInfo');
 
-export * from './dexTypes';
 export * from './osmosis-registry/chainInfos';
 export * from './osmosis-registry/ibcAssets';
+export type SecretContractAddress = Brand<string, 'ContractAddress'>;
 
 export enum CHAIN {
   Osmosis = 'Osmosis',
@@ -22,6 +21,7 @@ export enum CHAIN {
   Agoric= 'Agoric',
   Comdex= 'Comdex',
   Persistence= 'Persistence',
+  Quicksilver= 'Quicksilver',
 }
 
 export const SUPPORTED_CHAINS: CHAIN[] = [
@@ -35,6 +35,7 @@ export const SUPPORTED_CHAINS: CHAIN[] = [
   CHAIN.Agoric,
   CHAIN.Cosmos,
   CHAIN.Persistence,
+  CHAIN.Quicksilver,
 ];
 
 
@@ -77,5 +78,4 @@ export function getTokenDenomInfo(token: Token, isWrapped = false): DenomInfo {
   }
 }
 
-export type SecretContractAddress = Brand<string, 'ContractAddress'>;
 

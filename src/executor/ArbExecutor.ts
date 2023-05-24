@@ -1,20 +1,21 @@
-import {ArbV1} from "../monitorGqlClient";
 import {ArbWallet} from "../wallet/ArbWallet";
 import {BalanceMonitor} from "../balances/BalanceMonitor";
 import Aigle from "aigle";
 import {ArbRunLog} from "./ArbRunLog";
 import {ArbOperation} from "./aArbOperation";
-import {IFailingArbInfo, SwapMoveOperationsType} from "./types";
+import {ArbV1WinCost, IFailingArbInfo, SwapMoveOperationsType} from "./types";
 import MoveIBC from "./MoveIBC";
 import {CHAIN, getDexOriginChain} from "../ibc";
 import {SwapOperation} from "./SwapOperation";
 import {BalanceWaitOperation} from "./BalanceWaitOperation";
-import BigNumber from "bignumber.js";
+import { Logger } from "../utils";
 
 export class ArbExecutor {
   public failedReason: IFailingArbInfo;
+  private readonly logger: Logger;
 
-  constructor(public readonly arb: ArbV1) {
+  constructor(public readonly arb: ArbV1WinCost) {
+    this.logger = new Logger(this.id);
   }
 
   get id() {
@@ -25,6 +26,7 @@ export class ArbExecutor {
     const operationsQ = await this.getOperationsQueue(balanceMonitor);
     // Print plan
     // this.logger.log(`Plan move max ${token} from ${isWrappedOriginBalance ? 's' : ''}${fromChain} to ${toChain === CHAIN.Secret ? 's' : ''}${toChain} using single IBC tx.`.blue);
+    this.logger.log(operationsQ.map(p => p.toString()));
     await this.executeOperationsQ(operationsQ, arbWallet, balanceMonitor);
   }
 
@@ -60,10 +62,9 @@ export class ArbExecutor {
     }
     let swapOperation0 = new SwapOperation({
       dex: this.arb.dex0,
-      swapTokenSent: this.arb.token0,
-      expectedReturn: BigNumber(1), // TODO: provide calculation fn to be called with amount internally
+      tokenSent: this.arb.token0,
       route: this.arb.route0,
-      swapTokenReceived: this.arb.token1,
+      tokenReceived: this.arb.token1,
       tokenAmountIn: preparationPlan[preparationPlan.length - 1],
     });
     const bridgePlan = await moveIbc.createMoveIbcPlan({
@@ -81,10 +82,9 @@ export class ArbExecutor {
       ...bridgePlan,
       new SwapOperation({
         dex: this.arb.dex1,
-        swapTokenSent: this.arb.token1,
+        tokenSent: this.arb.token1,
         route: this.arb.route1,
-        expectedReturn: BigNumber(1), // TODO: provide calculation fn to be called with amount internally
-        swapTokenReceived: this.arb.token0,
+        tokenReceived: this.arb.token0,
         tokenAmountIn: bridgePlan[bridgePlan.length - 1],
       }),
       new BalanceWaitOperation({

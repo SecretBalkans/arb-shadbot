@@ -1,11 +1,20 @@
-import {IBCOperationType, FailReasons, IArbOperationExecuteResult, IFailingArbInfo, IOperationData} from './types';
+import {
+  IBCOperationType,
+  FailReasons,
+  IArbOperationExecuteResult,
+  IFailingArbInfo,
+  IOperationData,
+  Amount,
+  SwapTokenMap
+} from './types';
 import {Logger} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import BigNumber from 'bignumber.js';
-import {Amount, CHAIN, getTokenDenomInfo, SwapToken, SwapTokenMap} from '../ibc';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {IBCTransferOperation} from "./IBCTransferOperation";
 import {AxelarAssetTransfer, AxelarQueryAPI, CHAINS, Environment} from "@axelar-network/axelarjs-sdk";
+import { CHAIN, getTokenDenomInfo } from '../ibc';
+import { SwapToken } from './build-dex/dex/types/dex-types';
 
 const api = new AxelarQueryAPI({environment: Environment.MAINNET});
 
@@ -49,14 +58,14 @@ export default class AxelarBridgeOperation extends IBCTransferOperation {
       amount: this.data.amount,
       token: this.data.token
     }, arbWallet, balanceMonitor);
-    if (resolvedAmount instanceof BigNumber) {
+    if (BigNumber.isBigNumber(resolvedAmount)) {
       const result = await this.transferAxelar({
         amount: resolvedAmount,
         from: this.data.from,
         to: this.data.to,
         token: this.data.token,
       }, arbWallet);
-      return (result instanceof BigNumber) ? {
+      return (BigNumber.isBigNumber(result)) ? {
         success: true,
         result: {
           amount: result,

@@ -1,9 +1,14 @@
-import {FailReasons, IArbOperationExecuteResult, IBCOperationType, IFailingArbInfo, IOperationData} from './types';
+import {
+  Amount,
+  FailReasons,
+  IArbOperationExecuteResult,
+  IBCOperationType,
+  IFailingArbInfo,
+  IOperationData, SwapToken, SwapTokenMap
+} from './types';
 import {addressSafeString, Logger} from '../utils';
 import {ArbWallet, IBCChannel} from '../wallet/ArbWallet';
 import BigNumber from 'bignumber.js';
-import {Amount, CHAIN, getChainByChainId, getTokenDenomInfo, SwapToken, SwapTokenMap} from '../ibc';
-import {convertCoinToUDenomV2, makeIBCMinimalDenom} from '../utils/denoms';
 import {StdFee} from '@cosmjs/stargate';
 import {MsgTransfer} from 'cosmjs-types/ibc/applications/transfer/v1/tx';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
@@ -14,6 +19,8 @@ import * as injectiveTs from '@injectivelabs/sdk-ts'
 import { BigNumberInBase } from "@injectivelabs/utils";
 import {toBase64} from "@cosmjs/encoding";
 import { ChainRestTendermintApi } from '@injectivelabs/sdk-ts';
+import {CHAIN, getChainByChainId, getTokenDenomInfo} from "../ibc";
+import {convertCoinToUDenomV2, makeIBCMinimalDenom} from "./build-dex/utils";
 
 function getTimeoutTimestamp() {
   const timeoutInMinutes = 15;
@@ -36,7 +43,7 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
   logger: Logger;
 
   id(): string {
-    return `${this.data.from}-${this.data.to}_${this.data.isWrapped ? '(wrapped)' : ''}.${this.data.token}`;
+    return `${this.data.from}-${this.data.to}_${this.data.isWrapped ? '(wrapped).' : ''}${this.data.token}`;
   }
 
   constructor(data: IOperationData<IBCOperationType>, shouldLogDetails: boolean = true) {
@@ -48,12 +55,12 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
       amount: this.data.amount,
       token: this.data.token
     }, arbWallet, balanceMonitor);
-    if (resolvedAmount instanceof BigNumber) {
+    if (BigNumber.isBigNumber(resolvedAmount)) {
       const result = await this.transferIBC({
         ...this.data,
         amount: resolvedAmount,
       }, arbWallet);
-      return (result instanceof BigNumber) ? {
+      return (BigNumber.isBigNumber(result)) ? {
         success: true,
         result: {
           amount: result,

@@ -1,12 +1,11 @@
-import {IArbOperationExecuteResult, IOperationData, SecretSNIPOperationType} from './types';
+import {Denom, IArbOperationExecuteResult, IOperationData, SecretSNIPOperationType, SwapTokenMap} from './types';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
-import {Denom, SwapTokenMap} from '../ibc';
 import {CHAIN} from '../ibc';
 import {ArbOperationSequenced} from './aArbOperation';
-import {convertCoinToUDenomV2} from "../utils/denoms";
 import BigNumber from "bignumber.js";
 import {getGasFeeInfo} from "./utils";
+import {convertCoinToUDenomV2} from "./build-dex/utils";
 
 export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperationType> {
   constructor(data: IOperationData<SecretSNIPOperationType>, shouldLogInDetails: boolean = true) {
@@ -18,7 +17,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
       amount: this.data.amount,
       token: this.data.token
     }, arbWallet, balanceMonitor);
-    if (!(resolvedAmount instanceof BigNumber)) {
+    if (!(BigNumber.isBigNumber(resolvedAmount))) {
       return {
         success: false,
         result: {
@@ -36,7 +35,9 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
       result = await arbWallet.executeSecretContract({
         contractAddress: secretAddress.address, msg: {
           "deposit": {},
-        }, gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low, gasLimit: 60_000,
+        },
+        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
+        gasLimit: 60_000,
         sentFunds: [{
           denom: denom,
           amount: amountString
@@ -52,7 +53,9 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
             "amount": amountString,
             "denom": denom
           }
-        }, gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low, gasLimit: 60_000
+        },
+        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
+        gasLimit: 60_000
       });
       this.logger.log(result.tx)
     }

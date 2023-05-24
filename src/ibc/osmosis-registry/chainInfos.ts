@@ -195,9 +195,9 @@ const chainInfos = (
       explorerUrlToTx: 'https://finder.terra.money/columbus-5/tx/{txHash}',
     },
     {
-      rpc: 'https://1rpc.io/scrt-rpc',
-      rest: "https://lcd.secret.express",
-      // rest: 'https://secretnetwork-api.lavenderfive.com:443',
+      rpc: 'https://rpc.secret.express',
+      rest: 'https://lcd.secret.express',
+      //rest: 'https://lcd-secret.whispernode.com:443', // dead
       // rest: "https://api.scrt.network/",
       chainId: 'secret-4',
       chainName: 'Secret Network',
@@ -216,7 +216,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.0125,
+            low: 0.0025,
             average: 0.1,
             high: 0.25,
           },
@@ -1392,7 +1392,7 @@ const chainInfos = (
     },
     {
       rpc: 'https://rpc-comdex.carbonZERO.zone:443',
-      rest: 'https://comdex-api.lavenderfive.com/',
+      rest: 'https://rest.comdex.one',
       chainId: 'comdex-1',
       chainName: 'Comdex',
       bip44: {
@@ -3093,8 +3093,8 @@ const chainInfos = (
       explorerUrlToTx: 'https://cosmos-explorers.neobase.one/canto/tx/{txHash}',
     },
     {
-      rpc: 'https://rpc-quicksilver.keplr.app',
-      rest: 'https://lcd-quicksilver.keplr.app',
+      rpc: 'https://rpc-quicksilver.huginn.tech',
+      rest: 'https://quicksilver.api.kjnodes.com',
       chainId: 'quicksilver-2',
       chainName: 'Quicksilver',
       bip44: {
@@ -3107,7 +3107,7 @@ const chainInfos = (
           coinMinimalDenom: 'uqck',
           coinDecimals: 6,
           coinImageUrl: '/tokens/qck.svg',
-          coinGeckoId: 'pool:uqck',
+          coinGeckoId: 'quicksilver',
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
