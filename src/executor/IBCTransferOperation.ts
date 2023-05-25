@@ -122,7 +122,7 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
     } else {
       sentTokenDenom = makeIBCMinimalDenom(sourceChannel, chainDenom);
     }
-    let sentAmountString = convertCoinToUDenomV2(amount, sentTokenDecimals).toString();
+    let sentAmountString = convertCoinToUDenomV2(amount, sentTokenDecimals).toFixed(0);
 
     if (isWrapped) { // always isWrapped when using Axlr
       if (from === CHAIN.Axelar && to === CHAIN.Secret) {

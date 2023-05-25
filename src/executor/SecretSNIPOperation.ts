@@ -1,4 +1,11 @@
-import {Denom, IArbOperationExecuteResult, IOperationData, SecretSNIPOperationType, SwapTokenMap} from './types';
+import {
+  Denom,
+  FailReasons,
+  IArbOperationExecuteResult,
+  IOperationData,
+  SecretSNIPOperationType,
+  SwapTokenMap
+} from './types';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {CHAIN} from '../ibc';
@@ -43,7 +50,6 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
           amount: amountString
         }]
       });
-      this.logger.log(result.tx)
     } else {
       this.logger.log(`Unwrap ${resolvedAmount} s${this.data.token}`.blue);
       result = await arbWallet.executeSecretContract({
@@ -57,14 +63,25 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
         gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
         gasLimit: 60_000
       });
-      this.logger.log(result.tx)
     }
-    return {
-      success: true,
-      result: {
-        amount: resolvedAmount,
-        internal: result.tx,
-        isWrapped: this.data.wrap
+    if (result.code) {
+      return {
+        success: false,
+        result: {
+          internal: result.transactionHash,
+          isWrapped: false,
+          reason: FailReasons.Unhandled,
+          data: result.rawLog
+        }
+      }
+    } else {
+      return {
+        success: true,
+        result: {
+          amount: resolvedAmount,
+          internal: result.tx,
+          isWrapped: this.data.wrap
+        }
       }
     }
   }

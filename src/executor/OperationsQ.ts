@@ -1,8 +1,8 @@
 import {ArbOperation} from "./aArbOperation";
-import {MoveOperationType} from "./types";
+import {SwapMoveOperationsType} from "./types";
 
 export default class OperationsQ {
-  constructor(public readonly operations: ArbOperation<MoveOperationType>[]) {
+  constructor(public readonly operations: ArbOperation<SwapMoveOperationsType>[]) {
   }
 
   public async executeQ() {

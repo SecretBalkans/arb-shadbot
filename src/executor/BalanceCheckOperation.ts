@@ -121,9 +121,10 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
         moveAmount = balanceAmount.minus(reserveAmount);
       }
     }
-    /*if (moveAmount.isGreaterThan(balanceAmount)) { // this one fails because function is called faster than balance is updated in the balance monitor
+    // TODO: this one sometimes moves smaller amounts because it is called before balance is updated in the balance monitor
+    if (moveAmount.isGreaterThan(balanceAmount)) {
       moveAmount = balanceAmount.minus(reserveAmount);
-    }*/
+    }
     return moveAmount.isGreaterThan(0) ? moveAmount : BigNumber(0);
   }
 }
