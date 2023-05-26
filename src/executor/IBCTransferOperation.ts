@@ -4,7 +4,9 @@ import {
   IArbOperationExecuteResult,
   IBCOperationType,
   IFailingArbInfo,
-  IOperationData, SwapToken, SwapTokenMap
+  IOperationData,
+  SwapToken,
+  SwapTokenMap
 } from './types';
 import {addressSafeString, Logger} from '../utils';
 import {ArbWallet, IBCChannel} from '../wallet/ArbWallet';
@@ -16,9 +18,9 @@ import {getGasFeeInfo} from "./utils";
 import {ArbOperationSequenced} from "./aArbOperation";
 import InjectiveClient from "../wallet/clients/InjectiveClient";
 import * as injectiveTs from '@injectivelabs/sdk-ts'
-import { BigNumberInBase } from "@injectivelabs/utils";
+import {ChainRestTendermintApi} from '@injectivelabs/sdk-ts'
+import {BigNumberInBase} from "@injectivelabs/utils";
 import {toBase64} from "@cosmjs/encoding";
-import { ChainRestTendermintApi } from '@injectivelabs/sdk-ts';
 import {CHAIN, getChainByChainId, getTokenDenomInfo} from "../ibc";
 import {convertCoinToUDenomV2, makeIBCMinimalDenom} from "./build-dex/utils";
 
@@ -51,6 +53,7 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
   }
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<IBCOperationType> }> {
+    // Resolve amount if it depends on other operations before doing an IBC transfer
     let resolvedAmount = await this.resolveArbOperationAmount({
       amount: this.data.amount,
       token: this.data.token
@@ -151,7 +154,8 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
         try {
           //http://secretnetwork-mainnet-lcd.autostake.com:1317/ibc/core/channel/v1/channels?pagination.limit=1000
           const icsChannel = 'channel-61' // to axelar
-          this.logger.log(`Will execute secret IBC transfer ${amount} ${token} from (${from}/${senderSafe}) to (${to}/${receiverSafe}) (ics.${icsChannel} using contract secret1yxjmepvyl2c25vnt53cr2dpn8amknwausxee83)`);
+          let opMessage = `secret IBC transfer ${amount} ${token} from (${from}/${senderSafe}) to (${to}/${receiverSafe}) (ics.${icsChannel} using contract secret1yxjmepvyl2c25vnt53cr2dpn8amknwausxee83)`;
+          this.logger.log(`Will execute ${opMessage}`);
           result = await arbWallet.executeSecretContract({
             contractAddress: arbWallet.getSecretAddress(token).address,
             msg: {
@@ -169,8 +173,13 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
             gasLimit: 350_000,
             gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low
           })
-          if(result.code) {
-            throw new Error(JSON.stringify(result.rawLog, null, 4))
+          if (result.code) {
+            return {
+              internal: result.transactionHash,
+              data: result.rawLog,
+              reason: FailReasons.Unhandled,
+              message: `Failed: ${opMessage}`
+            }
           }
           return amount;
         } catch (err) {
@@ -329,6 +338,7 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
         // tslint:disable-next-line:no-unused-expression
         JSON.parse(JSON.parse(txnStatus.rawLog)[0].events.find(({type}) => type === 'send_packet').attributes.find(({key}) => key === 'packet_data').value).amount;
       } else {
+        // noinspection ExceptionCaughtLocallyJS
         throw new Error('Wrong channel ?!')
       }
     } catch (err) {

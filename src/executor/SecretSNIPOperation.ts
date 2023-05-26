@@ -43,7 +43,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
         contractAddress: secretAddress.address, msg: {
           "deposit": {},
         },
-        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
+        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low * 4,
         gasLimit: 60_000,
         sentFunds: [{
           denom: denom,
@@ -60,7 +60,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
             "denom": denom
           }
         },
-        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
+        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low * 4,
         gasLimit: 60_000
       });
     }

@@ -24,7 +24,7 @@ export default class ArbBuilder {
   private arbs: ArbV1WinCost[];
   prices: Prices;
   logger: Logger;
-  ARB_THRESHOLD: number = 0;
+  ARB_THRESHOLD: number = 0.1;
   deferredArbs: Record<string, ArbV1WinCost> = {};
   failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {};
   isWaitingForArb: boolean;

@@ -209,7 +209,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
                 'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
                 'padding': 'u3a9nScQ',
               },
-            }, gasPrice, gasLimit: 70e4 * (0.75 + apContractPath.length)
+            }, gasPrice, gasLimit: 75e4 * (0.75 + apContractPath.length)
           },
         );
         try {
