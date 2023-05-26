@@ -8,7 +8,7 @@ import MoveIBC from "./MoveIBC";
 import {CHAIN, getDexOriginChain} from "../ibc";
 import {SwapOperation} from "./SwapOperation";
 import {BalanceWaitOperation} from "./BalanceWaitOperation";
-import { Logger } from "../utils";
+import {Logger} from "../utils";
 
 export class ArbExecutor {
   public failedReason: IFailingArbInfo;
@@ -22,10 +22,13 @@ export class ArbExecutor {
     return this.arb.id;
   }
 
+  get reverseId() {
+    return this.arb.reverseId;
+  }
+
   async executeCurrentArb(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<void> {
     const operationsQ = await this.getOperationsQueue(balanceMonitor);
     // Print plan
-    // this.logger.log(`Plan move max ${token} from ${isWrappedOriginBalance ? 's' : ''}${fromChain} to ${toChain === CHAIN.Secret ? 's' : ''}${toChain} using single IBC tx.`.blue);
     this.logger.log(operationsQ.map(p => p.toString()));
     await this.executeOperationsQ(operationsQ, arbWallet, balanceMonitor);
   }
@@ -60,26 +63,27 @@ export class ArbExecutor {
       // Means we do not have funds on any chain
       return []
     }
-    let swapOperation0 = new SwapOperation({
+    let swapPlan0 = [new SwapOperation({
       dex: this.arb.dex0,
       tokenSent: this.arb.token0,
       route: this.arb.route0,
       tokenReceived: this.arb.token1,
       tokenAmountIn: preparationPlan[preparationPlan.length - 1],
-    });
+    }), new BalanceWaitOperation({
+      token: this.arb.token1,
+      isWrapped: dexChain0 === CHAIN.Secret,
+      chain: dexChain0
+    })];
     const bridgePlan = await moveIbc.createMoveIbcPlan({
       fromChain: dexChain0,
       toChain: dexChain1,
       token: this.arb.token1,
-      amount: swapOperation0,
+      amount: swapPlan0[0],
     })
     if (!bridgePlan) {
       return [];
     }
-    return [
-      ...preparationPlan,
-      swapOperation0,
-      ...bridgePlan,
+    const swapPlan1 = [
       new SwapOperation({
         dex: this.arb.dex1,
         tokenSent: this.arb.token1,
@@ -91,7 +95,13 @@ export class ArbExecutor {
         chain: dexChain1,
         token: this.arb.token0,
         isWrapped: dexChain1 === CHAIN.Secret,
-      }),
+      })
+    ]
+    return [
+      ...preparationPlan,
+      ...swapPlan0,
+      ...bridgePlan,
+      ...swapPlan1,
     ];
   }
 

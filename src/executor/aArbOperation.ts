@@ -19,6 +19,8 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
 
   abstract id(): string;
 
+  abstract toJSON(): any;
+
   logger: Logger;
 
   protected constructor(public readonly data: IOperationData<T>, protected readonly shouldLogInDetails: boolean = true) {
@@ -26,7 +28,8 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   }
 
   toString(): string {
-    return `OP-${this.type()}-${this.id()}`;
+    let dataParams1 = this.toJSON();
+    return `OP-${this.type()}-${this.id()}${dataParams1 ? `-${typeof dataParams1 === "string" ? dataParams1 : JSON.stringify(dataParams1)}` : ''}`;
   }
 
   public execute<B extends boolean>(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: B, result: B extends true ? IOperationResult<T> : IFailingArbInfo }>;

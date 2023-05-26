@@ -1,7 +1,7 @@
 import {
   Amount,
   FailReasons,
-  IArbOperationExecuteResult,
+  IArbOperationExecuteResult, IbcMoveAmountToJSON,
   IOperationData,
   SwapOperationType,
   SwapToken
@@ -51,6 +51,10 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
 
   id() {
     return `${this.data.dex}.${this.data.tokenSent}-${this.data.tokenReceived}`;
+  }
+
+  toJSON() {
+    return IbcMoveAmountToJSON(this.data.tokenAmountIn)
   }
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<SwapOperationType> }> {
@@ -127,7 +131,6 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
               'denom': sentDenom,
               'amount': sentAmountString,
             },
-            //TODO: export calculate code from arbjs to get minReceivingAmountString
             'tokenOutMinAmount': minReceivingAmountString,
           },
         }];
@@ -199,22 +202,42 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
           },
         );
         const gasPrice: number = getGasFeeInfo(CHAIN.Secret).amount;
-        const tx = await arbWallet.executeSecretContract(
-          {
-            contractAddress: swapTokenAddress, msg: {
-              send: {
-                'recipient': routerAddress,
-                'recipient_code_hash': routerHash,
-                'amount': sentAmountString,
-                'msg': toBase64(Buffer.from(raw_msg, 'ascii')),
-                'padding': 'u3a9nScQ',
+        let tx;
+        try {
+          let msg = toBase64(Buffer.from(raw_msg, 'ascii'));
+          tx = await arbWallet.executeSecretContract(
+            {
+              contractAddress: swapTokenAddress, msg: {
+                send: {
+                  'recipient': routerAddress,
+                  'recipient_code_hash': routerHash,
+                  'amount': sentAmountString,
+                  'msg': msg,
+                  // TODO: padding calculation
+                  'padding': 'u3a9nScQ',
+                },
               },
-            }, gasPrice, gasLimit: 75e4 * (0.75 + apContractPath.length)
-          },
-        );
+              gasPrice,
+              gasLimit: 75e4 * (0.75 + apContractPath.length)
+            },
+          );
+        } catch (err) {
+          if (err.code === 5 && err.message.includes('tx not found')) {
+            this.logger.log(err.message, 'will continue after shade swap optimistically');
+          }
+          let txHashPart = err.message.split('tx not found: ')[1].split(': key not found')[0];
+          return {
+            success: true,
+            result: {
+              internal: err.message,
+              data: txHashPart,
+              amount: expectedReturn
+            }
+          }
+        }
         try {
           let findLast = _.findLast(tx.arrayLog, {key: "amount_out"});
-          let token1ReturnAmount = convertCoinToUDenomV2(findLast.value, getTokenDenomInfo(SwapTokenMap[this.token1]).decimals);
+          let token1ReturnAmount = convertCoinToUDenomV2(findLast?.value, getTokenDenomInfo(SwapTokenMap[this.token1]).decimals);
           return {
             success: true,
             result: {

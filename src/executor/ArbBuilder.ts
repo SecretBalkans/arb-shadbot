@@ -87,6 +87,7 @@ export default class ArbBuilder {
       return BigNumber(price);
     } else {
       this.logger.debugOnce(`Unsupported price token ${token}`.red);
+      return BigNumber(0);
     }
   }
 
@@ -96,8 +97,10 @@ export default class ArbBuilder {
       return;
     }
     this.currentArb = new ArbExecutor(bestArb);
-    this.logger.log(`Start arb ${this.currentArb.id} for win $${this.currentArb.arb.winUsd}`.green.underline);
-    this.currentArb.executeCurrentArb(this.arbWallet, this.balanceMonitor).then(this.finishArb.bind(this));
+    this.logger.log(`Start arb ${this.currentArb.id} for max win of $${this.currentArb.arb.winUsd}`.green.underline);
+    setImmediate(() => {
+      this.currentArb.executeCurrentArb(this.arbWallet, this.balanceMonitor).then(this.finishArb.bind(this));
+    })
   }
 
   private async finishArb() {
@@ -108,11 +111,14 @@ export default class ArbBuilder {
     if (this.currentArb.failedReason) {
       this.failedArbs[this.currentArb.id] = this.currentArb.failedReason || true;
       await this.uploadArbFailing(this.currentArb.failedReason);
+    } else {
+      await this.uploadArbRunLog(this.currentArb.getRunLog());
+      this.deferCurrentArb(this.currentArb);
     }
-    await this.uploadArbRunLog(this.currentArb.getRunLog());
-    this.deferCurrentArb(this.currentArb);
     this.currentArb = null;
-    this.chooseAndStartArb();
+    setImmediate(() => {
+      this.chooseAndStartArb();
+    })
   }
 
   // noinspection JSUnusedLocalSymbols
@@ -122,6 +128,7 @@ export default class ArbBuilder {
 
   private deferCurrentArb(currentArb: ArbExecutor) {
     this.deferredArbs[currentArb.id] = currentArb.arb;
+    this.deferredArbs[currentArb.reverseId] = currentArb.arb;
     // TODO: modify local arbs optimistically depending on currentArb result
     //  so we do not choose the same arb again if it is not winning anymore
     // i.e. remove arbWin from this.arbs, but make sure this.arbs has

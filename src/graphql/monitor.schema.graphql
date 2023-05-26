@@ -27,6 +27,7 @@ type arb_v1 {
     dex_0: String!
     dex_1: String!
     id: String!
+    reverse_id: String!
     last_ts: timestamp
     route_0(
         "JSON select path"
@@ -102,6 +103,8 @@ enum arb_v1_select_column {
     dex_1
     "column name"
     id
+    "column name"
+    reverse_id
     "column name"
     last_ts
     "column name"
@@ -235,6 +238,7 @@ input arb_v1_stream_cursor_value_input {
     dex_0: String
     dex_1: String
     id: String
+    reverse_id: String
     last_ts: timestamp
     route_0: jsonb
     route_1: jsonb

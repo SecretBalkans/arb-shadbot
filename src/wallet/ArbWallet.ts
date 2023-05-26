@@ -20,7 +20,7 @@ import Aigle from 'aigle';
 import BigNumber from 'bignumber.js';
 import path from 'path';
 import {loadSync} from 'protobufjs';
-import {SerializedBalanceUpdate} from '../balances/BalanceMonitor';
+import {BalanceUpdate, SerializedBalanceUpdate} from '../balances/BalanceMonitor';
 import {accountFromAnyStrideSupport} from './customAccountParser';
 import {ArbWalletConfig} from './types';
 import InjectiveClient from "./clients/InjectiveClient";
@@ -33,8 +33,6 @@ import {
 } from "../executor/build-dex/utils";
 import {initShadeTokens, getPairsRaw} from "../executor/build-dex/dex/shade/shade-api-utils";
 import { getShadeTokenBySymbol } from '../executor/build-dex/dexSdk';
-
-const logger = new Logger('ArbWallet');
 
 export const swapTypeUrlOsmo = '/osmosis.gamm.v1beta1.MsgSwapExactAmountIn';
 
@@ -62,7 +60,7 @@ export class ArbWallet {
   }[]>>;
   private readonly betaChannelApiChains: any = [];
   counterpartyChains: Partial<Record<CHAIN, Record<IBCChannel, CHAIN | string>>> = {};
-  logger: Logger = new Logger('ArbWallet');
+  logger: Logger = new Logger('ArbWallet', true);
   mapOfZonesData: any[];
   private isFetchingSecret: Boolean;
 
@@ -569,7 +567,7 @@ export class ArbWallet {
       const connectionRestUrl = `${restUrl}/ibc/core/channel${isBetaApi ? `/v1beta1` : '/v1'}/channels/${channelId}/ports/${portId}/client_state`;
       const response = await fetchTimeout(connectionRestUrl);
       if (!response || response.message) {
-        logger.debugOnce(`${chain} ${response.message} ${restUrl}`);
+        this.logger.debugOnce(`${chain} ${response.message} ${restUrl}`);
         this.betaChannelApiChains.push(chain);
         return this.getChannelCounterpartyChain(chain, channelId, portId);
       }
@@ -627,7 +625,7 @@ export class ArbWallet {
       // this.ibcInfo[chain] = _.zipObject(_.map(map, 'chain'), map);
       return _.groupBy(map, 'chain') as any;
     } catch (err) {
-      logger.debugOnce(`Load ibc cache error chain = ${chain}: ${err.message}`);
+      this.logger.debugOnce(`Load ibc cache error chain = ${chain}: ${err.message}`);
       await new Promise(resolve => setTimeout(resolve, 1500));
       return await this.fetchChannelGroups(chain, skip);
     }
@@ -671,7 +669,7 @@ export class ArbWallet {
           return (channelMapOfZonesData?.ibc_tx_success_rate || 0) * channelMapOfZonesData?.ibc_cashflow_in; // pick most successful highest cashflow
         });
         if (!maxChannel) {
-          this.logger.debugOnce(`Error choosing channel between ${chain}-${otherChain} from ${channelIds}`.red);
+          this.logger.debugCachedOnce(`Error choosing channel between ${chain}-${otherChain} from ${channelIds}`);
         }
         return [otherChain, maxChannel];
       }).fromPairs().value()];
@@ -808,7 +806,7 @@ export class BalanceMap {
   constructor(public readonly chain: CHAIN, public readonly tokenBalances: TokenBalanceWithDenomInfo[]) {
   }
 
-  static fromSerializedUpdate(balanceUpdate: SerializedBalanceUpdate): BalanceMap {
+  static fromSerializedBalanceUpdate(balanceUpdate: SerializedBalanceUpdate): BalanceMap {
     return new BalanceMap(balanceUpdate.chain, balanceUpdate.balances.map((balance) => {
       return {
         ...balance,
@@ -828,10 +826,11 @@ export class BalanceMap {
   }
 
   toString(): string {
+    let tokenBalances = this.tokenBalances.filter(({amount}) => !amount.isEqualTo(0));
     return JSON.stringify(
       _.zipObject(
-        this.tokenBalances.map(t => `${t.denomInfo.isWrapped ? 's' : ''}${t.token}`),
-        this.tokenBalances.map(({amount}) => amount.toString()))
+        tokenBalances.map(t => `${t.denomInfo.isWrapped ? 's' : ''}${t.token}`),
+        tokenBalances.map(({amount}) => amount.toString()))
       , null, 4);
   }
 
@@ -870,7 +869,13 @@ export class BalanceMap {
   }
 
 
-  updateBalances(balanceUpdate: SerializedBalanceUpdate) {
+  updateBalanceMap(balanceUpdate: SerializedBalanceUpdate): BalanceUpdate {
+    let balanceMap = BalanceMap.fromSerializedBalanceUpdate(balanceUpdate);
+    const realBalanceUpdate = new BalanceUpdate({
+      chain: balanceUpdate.chain,
+      balances: balanceMap,
+      diff: balanceMap.diff(this)
+    })
     _.forEach(balanceUpdate.balances, ({token, denomInfo, amount}) => {
       let tokenInBalance = _.find(this.tokenBalances, {
         token,
@@ -886,5 +891,6 @@ export class BalanceMap {
         })
       }
     });
+    return realBalanceUpdate;
   }
 }

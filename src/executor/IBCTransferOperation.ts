@@ -2,6 +2,7 @@ import {
   Amount,
   FailReasons,
   IArbOperationExecuteResult,
+  IbcMoveAmountToJSON,
   IBCOperationType,
   IFailingArbInfo,
   IOperationData,
@@ -46,6 +47,10 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
 
   id(): string {
     return `${this.data.from}-${this.data.to}_${this.data.isWrapped ? '(wrapped).' : ''}${this.data.token}`;
+  }
+
+  toJSON() {
+    return IbcMoveAmountToJSON(this.data.amount)
   }
 
   constructor(data: IOperationData<IBCOperationType>, shouldLogDetails: boolean = true) {
@@ -185,7 +190,7 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
         } catch (err) {
           return {
             internal: {
-              tx: result,
+              tx: result || 'tx unavailable',
               remote_address: receiver,
             },
             reason: FailReasons.Unhandled,
@@ -342,12 +347,12 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
         throw new Error('Wrong channel ?!')
       }
     } catch (err) {
-      this.logger.error('Transfer error'.red, txnStatus.rawLog);
-      //cleanupClient(from);
-      //continue;
-
-      // noinspection ExceptionCaughtLocallyJS
-      throw new Error('Transfer Error');
+      return {
+        reason: FailReasons.IBC,
+        internal: txnStatus.rawLog,
+        data: txnStatus.transactionHash,
+        message: `Unhandled transfer error: ${err.message}`
+      }
     }
     return amount;
 

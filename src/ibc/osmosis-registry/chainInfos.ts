@@ -56,12 +56,12 @@ const chainInfos = (
         OSMOSIS_RPC_OVERWRITE ??
         (IS_TESTNET
           ? 'https://rpc.testnet.osmosis.zone/'
-          : 'https://rpc.osmosis.interbloc.org'),
+          : 'https://osmosis-rpc.polkachu.com'),
       rest:
         OSMOSIS_REST_OVERWRITE ??
         (IS_TESTNET
           ? 'https://lcd.testnet.osmosis.zone/'
-          : 'https://rest-osmosis.ecostake.com'),
+          : 'https://osmosis-lcd.quickapi.com:443'),
       chainId:
         OSMOSIS_CHAIN_ID_OVERWRITE ??
         (IS_TESTNET ? 'osmo-test-4' : 'osmosis-1'),
@@ -114,7 +114,7 @@ const chainInfos = (
           : 'https://www.mintscan.io/osmosis/txs/{txHash}'),
     },
     {
-      rpc: 'https://cosmos-rpc.easy2stake.com/',
+      rpc: 'https://rpc.cosmoshub.strange.love',
       rest: 'https://lcd.cosmos.dragonstake.io',
       chainId: 'cosmoshub-4',
       chainName: 'Cosmos Hub',
@@ -133,7 +133,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.0025,
+            low: 0.00875,
             average: 0.025,
             high: 0.03,
           },
@@ -196,7 +196,7 @@ const chainInfos = (
     },
     {
       rpc: 'https://rpc.secret.express',
-      rest: 'https://lcd.secret.express',
+      rest: 'https://lcd-secret.keplr.app',
       //rest: 'https://lcd-secret.whispernode.com:443', // dead
       // rest: "https://api.scrt.network/",
       chainId: 'secret-4',
@@ -216,7 +216,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.0125,
+            low: 0.035,
             average: 0.1,
             high: 0.25,
           },
@@ -395,8 +395,8 @@ const chainInfos = (
       features: ['ibc-transfer', 'ibc-go'],
     },
     {
-      rpc: 'https://persistence-rpc.quantnode.tech',
-      rest: 'https://persistence-lcd.quantnode.tech',
+      rpc: 'https://rpc.persistence.posthuman.digital:443',
+      rest: 'https://lcd-persistence.keplr.app',
       chainId: 'core-1',
       chainName: 'Persistence',
       bip44: {

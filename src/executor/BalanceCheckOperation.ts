@@ -3,8 +3,8 @@ import {
   BalanceCheckOperationType,
   FailReasons,
   IArbOperationExecuteResult,
-  IbcMoveAmount,
-  IOperationData, SwapToken,
+  IbcMoveAmount, IbcMoveAmountToJSON,
+  IOperationData, prettyMoveAmount, SwapToken,
   SwapTokenMap
 } from './types';
 import {ArbWallet} from '../wallet/ArbWallet';
@@ -16,8 +16,9 @@ import {CHAIN, getChainByChainId, getTokenDenomInfo} from '../ibc';
 
 export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOperationType> {
   MINIMUM_CHAIN_NATIVE_AMOUNTS = {
-    [CHAIN.Secret]: 2.5,
-    [CHAIN.Injective]: 0.01,
+    [CHAIN.Secret]: 5,
+    [CHAIN.Injective]: 0.025,
+    [CHAIN.Osmosis]: 3,
   };
 
   constructor(data: IOperationData<BalanceCheckOperationType>, shouldLogInDetails: boolean = true) {
@@ -30,8 +31,7 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
       isWrapped: this.data.isWrapped
     });
     let amountMax = this.data.amountMax;
-    // TODO: use this hardcode of 0 if you want to do any testing despite what real arb says
-    let amountMin = this.data.amountMin ? /*BigNumber(0) ||*/ this.data.amountMin : null;
+    let amountMin = this.data.amountMin ? this.data.amountMin : null;
     if (amountMax !== 'max' && !(BigNumber.isBigNumber(amountMax))) {
       let resolvedAmount = await this.resolveArbOperationAmount({
         amount: amountMax,
@@ -90,6 +90,10 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
     return 'BalanceCheck';
   }
 
+  toJSON() {
+    return [prettyMoveAmount(this.data?.amountMin) || 0, IbcMoveAmountToJSON(this.data.amountMax)]
+  }
+
   private getMaxMoveAmountFromChain(balanceMonitor: BalanceMonitor, {
     originChain,
     asset,
@@ -103,8 +107,13 @@ export class BalanceCheckOperation extends ArbOperationSequenced<BalanceCheckOpe
     const gasFeeInfo = getGasFeeInfo(originChain);
     const assetNativeChain: CHAIN = getChainByChainId(getTokenDenomInfo(SwapTokenMap[asset]).chainId);
     let moveAmount: BigNumber;
-    const reserveAmount = BigNumber.maximum((this.MINIMUM_CHAIN_NATIVE_AMOUNTS)[assetNativeChain] || BigNumber(0), assetNativeChain === originChain ? BigNumber(gasFeeInfo.amount).multipliedBy(this.ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER) : BigNumber(0));
-
+    let reserveAmount = BigNumber(0);
+    if (assetNativeChain === originChain) {
+      reserveAmount = BigNumber.maximum(
+        this.MINIMUM_CHAIN_NATIVE_AMOUNTS[assetNativeChain] || BigNumber(0),
+        BigNumber(gasFeeInfo.amount).multipliedBy(this.ORIGIN_CHAIN_RESERVE_FEE_MULTIPLIER)
+      );
+    }
     if (amountMax === 'max') {
       moveAmount = balanceAmount;
     } else {

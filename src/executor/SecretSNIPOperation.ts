@@ -1,7 +1,7 @@
 import {
   Denom,
   FailReasons,
-  IArbOperationExecuteResult,
+  IArbOperationExecuteResult, IbcMoveAmountToJSON,
   IOperationData,
   SecretSNIPOperationType,
   SwapTokenMap
@@ -19,6 +19,9 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
     super(data, shouldLogInDetails);
   }
 
+  toJSON() {
+    return IbcMoveAmountToJSON(this.data.amount)
+  }
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean; result: IArbOperationExecuteResult<SecretSNIPOperationType> }> {
     let resolvedAmount = await this.resolveArbOperationAmount({
       amount: this.data.amount,
@@ -28,6 +31,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
       return {
         success: false,
         result: {
+          reason: FailReasons.NoBalance,
           message: `Cannot ${this.data.wrap ? 'wrap' : 'unwrap'} ${resolvedAmount.data} ${this.data.token}. Reason: ${resolvedAmount.reason}`,
           ...resolvedAmount
         }
@@ -43,7 +47,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
         contractAddress: secretAddress.address, msg: {
           "deposit": {},
         },
-        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low * 4,
+        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
         gasLimit: 60_000,
         sentFunds: [{
           denom: denom,
@@ -60,7 +64,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
             "denom": denom
           }
         },
-        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low * 4,
+        gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
         gasLimit: 60_000
       });
     }

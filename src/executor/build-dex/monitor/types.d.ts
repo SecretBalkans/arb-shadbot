@@ -12,6 +12,7 @@ export interface ArbV1Raw {
     dex_0: string;
     dex_1: string;
     id: string;
+    reverse_id: string;
     last_ts: Date;
     route_0: SerializedRoute<DexProtocolName>;
     route_1: SerializedRoute<DexProtocolName>;
@@ -27,6 +28,7 @@ export interface ArbV1<T extends number | BigNumber> {
     dex0: DexProtocolName;
     dex1: DexProtocolName;
     id: string;
+    reverseId: string;
     route0: Route<DexProtocolName>;
     route1: Route<DexProtocolName>;
     token0: SwapToken;

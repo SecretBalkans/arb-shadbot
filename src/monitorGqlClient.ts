@@ -38,7 +38,8 @@ const SUBSCRIBE_QUERY = gql`
             token_0,
             route_1,
             token_1,
-            ts
+            ts,
+            reverse_id
         }
     }
 `;

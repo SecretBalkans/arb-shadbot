@@ -10,10 +10,13 @@ import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from './MoveIBC';
 import {ArbOperation} from './aArbOperation';
 import BigNumber from "bignumber.js";
+import _ from "lodash";
 
 export class BalanceWaitOperation extends ArbOperation<BalanceWaitOperationType> {
+  private readonly uid: string;
   constructor(data: IOperationData<BalanceWaitOperationType>, shouldLogInDetails: boolean = true) {
     super(data, shouldLogInDetails);
+    this.uid = _.uniqueId();
   }
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean; result: IArbOperationExecuteResult<BalanceWaitOperationType> }> {
@@ -46,5 +49,16 @@ export class BalanceWaitOperation extends ArbOperation<BalanceWaitOperationType>
 
   type(): string {
     return 'BalanceWait';
+  }
+
+  override toString(): string {
+    // BalanceWait is the lowest in the stack so we override
+    // it's toJSON to equal it's toSTRING()
+    // as it is a basic operation at the end of every other operation toString()
+    return this.toJSON();
+  }
+
+  toJSON() {
+    return `${this.type()}_${this.id()}_#${this.uid}`;
   }
 }

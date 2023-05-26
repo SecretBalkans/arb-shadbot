@@ -8,6 +8,7 @@ import {
   ArbV1,
   Route, ArbV1Raw,
 } from './build-dex/dexSdk';
+import _ from "lodash";
 
 export * from '../executor/build-dex/dex/types/dex-types';
 
@@ -31,7 +32,16 @@ export type IOperationResult<T extends SwapMoveOperationsType> =
         : T extends 'secretSNIP' ? SecretSNIPOperationResult
         : BalanceCheckOperationResult;
 
+export function prettyMoveAmount(num?: Amount | ArbOperation<SwapMoveOperationsType>) {
+  if(!num) {
+    return 0;
+  }
+  return num.hasOwnProperty('toFixed') ? +_.invoke(num, 'toFixed', 4) : num.toJSON();
+}
 export type IbcMoveAmount = Amount | 'max';
+export function IbcMoveAmountToJSON(m: IbcMoveAmount | ArbOperation<SwapMoveOperationsType>): any {
+  return m === 'max' ? 'max' : prettyMoveAmount(m);
+}
 export type IBCMoveCHAIN = CHAIN | 'any';
 export type IArbOperationExecuteResult<T extends SwapMoveOperationsType> = IOperationResult<T> | IFailingArbInfo;
 

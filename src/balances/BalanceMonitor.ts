@@ -11,7 +11,6 @@ import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from '../executor/MoveIBC';
 import {execute} from "../graphql/gql-execute";
 import gql from 'graphql-tag';
 import {Amount, SwapToken, SwapTokenMap, Token} from "../executor/build-dex/dexSdk";
-import { convertCoinFromUDenomV2 } from '../executor/build-dex/utils';
 
 export interface SerializedBalanceUpdate {
   chain: CHAIN,
@@ -91,23 +90,33 @@ export class BalanceMonitor implements CanLog {
     this.logger = new Logger('BalanceMonitor');
   }
 
-  public readonly events = new EventEmitter();
+  private readonly _internalEvents = new EventEmitter();
 
   public getTokenAmount(chain: CHAIN, token: Token, isWrapped: boolean | 'both'): Amount | false {
     return this.getTokenInfoInternal(this.balances[chain]?.tokenBalances, token, isWrapped)?.amount;
   }
 
   public getTokenInfoInternal<T extends {token: P, amount: P, denomInfo: K}, P extends string | BigNumber, K extends {decimals: number, isWrapped?: boolean}>(balances: T[], token: string, isWrapped: boolean | 'both'): T | undefined {
-    return _.find(balances, {token, denomInfo: {isWrapped}}) as any as T | undefined;
+    return _.find(balances, ({token: t, denomInfo: {isWrapped: w}}) => {
+      return token === t && !!w === !!isWrapped;
+    }) as any as T | undefined;
   }
 
-  public updateBalances(balanceUpdate: SerializedBalanceUpdate) {
+  public updateBalances(balanceUpdate: SerializedBalanceUpdate): BalanceUpdate {
+    let realBalanceUpdate: BalanceUpdate;
     if (!this.balances[balanceUpdate.chain]) {
-      this.balances[balanceUpdate.chain] = BalanceMap.fromSerializedUpdate(balanceUpdate);
+      this.balances[balanceUpdate.chain] = BalanceMap.fromSerializedBalanceUpdate(balanceUpdate);
+      realBalanceUpdate = new BalanceUpdate({
+        chain: balanceUpdate.chain,
+        balances: BalanceMap.fromSerializedBalanceUpdate(balanceUpdate),
+        diff: BalanceMap.fromSerializedBalanceUpdate(balanceUpdate)
+      });
     } else {
-      this.balances[balanceUpdate.chain].updateBalances(balanceUpdate);
+      realBalanceUpdate = this.balances[balanceUpdate.chain].updateBalanceMap(balanceUpdate);
     }
-    this.events.emit('balance', balanceUpdate);
+    this._internalEvents.emit('balanceUpdate.chain', realBalanceUpdate.chain);
+    this._internalEvents.emit('balanceUpdate', realBalanceUpdate);
+    return realBalanceUpdate;
   }
 
   private readonly BOT_ID = "dea2ae0b-9909-4c79-8e31-a9376957c3f6";
@@ -116,10 +125,10 @@ export class BalanceMonitor implements CanLog {
     if (!this.enabledLocalDBUpdate) {
       this.logger.log('Enabled local db bot balance updates!'.green);
       this.enabledLocalDBUpdate = true;
-      this.events.on('balance', (balanceUpdate: SerializedBalanceUpdate) => {
+      this._internalEvents.on('balanceUpdate.chain', (chain: CHAIN) => {
         let balanceObject = {
-          balances: _(balanceUpdate.balances).map((val) => {
-            let amount = convertCoinFromUDenomV2(val.amount, val.denomInfo.decimals).toFixed(val.denomInfo.decimals);
+          balances: _(this.balances[chain].tokenBalances).map((val) => {
+            let amount = val.amount.toFixed(val.denomInfo.decimals);
             let token = SwapTokenMap[val.token];
             if (val.denomInfo.isWrapped && (token === SwapToken.SCRT || getChainByChainId(val.denomInfo.chainId) !== CHAIN.Secret)) {
               return [`s${token}`, amount];
@@ -128,7 +137,7 @@ export class BalanceMonitor implements CanLog {
             }
           }).fromPairs().value(),
           bot_id: this.BOT_ID,
-          chain_id: balanceUpdate.chain
+          chain_id: chain
         };
         execute(gql`
             mutation updateBalances($object: bot_balances_insert_input! = {}) {
@@ -144,7 +153,7 @@ export class BalanceMonitor implements CanLog {
             message = JSON.parse(err.message.replace('Fetch error: ', '')).message;
           } catch {
           }
-          this.logger.debugOnce('GQL', message);
+          this.logger.debugOnce('local.gql.updates', message);
         })
       })
     }
@@ -171,15 +180,16 @@ export class BalanceMonitor implements CanLog {
       new Promise<false>(resolve => setTimeout(() => resolve(false), maxWaitTime)),
       new Promise<Amount>(resolve => {
         this.logger.log(`Waiting for ${isBalanceCheck ? 'balance' : 'deposit'} of ${isWrapped ? 's': ''}${token} on ${chain}...`.blue);
-        const listener = (balanceUpdate: SerializedBalanceUpdate) => {
+        const listener = (balanceUpdate: BalanceUpdate) => {
           const prop = isBalanceCheck ? 'balances' : 'diff';
-          if (balanceUpdate.chain === chain && BigNumber(this.getTokenInfoInternal(balanceUpdate[prop] as SerializedBalances, swapToken,isWrapped)?.amount).isGreaterThan(0)) {
-            this.events.removeListener('balance', listener);
-            resolve(BigNumber(convertCoinFromUDenomV2(this.getTokenInfoInternal(balanceUpdate[prop] as SerializedBalances, swapToken, isWrapped)?.amount, this.getTokenInfoInternal(balanceUpdate[prop], swapToken, isWrapped)?.denomInfo.decimals)));
+          let amount = this.getTokenInfoInternal(balanceUpdate[prop].tokenBalances, swapToken,isWrapped)?.amount;
+          if (balanceUpdate.chain === chain && amount?.isGreaterThan(0)) {
+            this._internalEvents.removeListener('balanceUpdate.serialized', listener);
+            resolve(amount);
           }
           return false;
         };
-        this.events.on('balance', listener);
+        this._internalEvents.on('balanceUpdate', listener);
       })]);
   }
 }

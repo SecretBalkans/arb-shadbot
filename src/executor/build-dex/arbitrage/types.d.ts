@@ -1,6 +1,7 @@
 import { DexProtocolName, SerializedRoute, SwapToken } from "../dex/types/dex-types";
 export interface ArbPathParsed {
     id: string;
+    reverseId: string;
     dex1: DexProtocolName;
     dex0: DexProtocolName;
     amountIn: number;

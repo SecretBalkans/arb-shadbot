@@ -32,7 +32,7 @@ function fetchTimeout(url, options = {}, timeout = 25000) {
             return JSON.parse(text);
         }
         catch (err) {
-            throw text ? new Error(text) : err;
+            throw text ? new Error(`${text} / ${url}`) : err;
         }
     });
 }

@@ -14,6 +14,7 @@ import BigNumber from "bignumber.js";
 import Aigle from "aigle";
 import {SwapToken} from "./executor/build-dex/dex/types/dex-types";
 import {ArbV1WinRaw} from "./executor/types";
+import {subscribeBotStatus, updateBotReportedStatus, updateSupervisorReportedTs} from "./graphql/gql-execute";
 
 const IS_TEST = 0;
 
@@ -27,26 +28,7 @@ ipc.config.logInColor = false; //default
 ipc.config.logDepth = 1; //default
 
 const monitorId = 'BalanceMonitor';
-let worker;
-
-function spawnWorker() {
-  worker = cluster.fork();
-  logger.log('Spawning bot process ...'.yellow);
-  worker.on('error', (err) => {
-    logger.log(`Worker ${worker.id} error`.red, err);
-  });
-  worker.on('listening', () => {
-    logger.log(`Worker ${worker.id} online`.green);
-  });
-  worker.on('exit', () => {
-    logger.log(`Worker ${worker.id} died.`.red);
-    worker.destroy();
-    worker = spawnWorker()();
-  });
-  return () => {
-    return worker;
-  };
-}
+const botID = 'dea2ae0b-9909-4c79-8e31-a9376957c3f6';
 
 const bot0Wallet = new ArbWallet({
   mnemonic: config.secrets.cosmos.mnemonic,
@@ -64,18 +46,62 @@ const bot0Wallet = new ArbWallet({
   }
 
   if (cluster.isPrimary) {
-    let prices, lastArbs: ArbV1WinRaw[];
-    logger = new Logger('BalanceMonitor');
-    ipc.config.logger = (msg) => logger.log(msg.gray);
 
-    ipc.config.id = monitorId;
-    ipc.config.retry = 1000;
-
+    let worker, initialBalanceWaitBotSpawn;
     let botSocket;
     let loggerInitialBalanceUpdate = {};
     let initialBalances: Record<string, BalanceUpdate> = {};
+    function spawnWorker() {
+      worker = cluster.fork();
+      updateBotReportedStatus(botID, `Starting...`);
+      logger.log('Spawning bot process ...'.yellow);
+      worker.on('error', (err) => {
+        updateBotReportedStatus(botID, `Errored`);
+        logger.log(`Worker error`.red, err);
+      });
+      worker.on('exit', () => {
+        updateBotReportedStatus(botID, `Stopped`);
+        logger.log(`Worker died.`.red);
+        worker?.destroy();
+        botSocket = null;
+        loggerInitialBalanceUpdate = {};
+        worker = null;
+      });
+      return () => {
+        return worker;
+      };
+    }
+
+    setInterval(() => {
+      updateSupervisorReportedTs(botID)
+    }, 5000);
+    updateSupervisorReportedTs(botID).catch(err => logger.log(err));
+    let botTargetStatus;
+    subscribeBotStatus(botID).subscribe((bot) => {
+      botTargetStatus = bot.status;
+      if (botTargetStatus === false && worker) {
+        logger.log('Stopping worker...')
+        worker?.destroy()
+        worker = null;
+      }
+      if (botTargetStatus === true && !worker && !initialBalanceWaitBotSpawn) {
+        spawnWorker();
+      }
+    })
+    let prices, lastArbs: ArbV1WinRaw[];
+    logger = new Logger('BalanceMonitor');
+    ipc.config.logger = (msg) => logger.log(msg.gray);
+    const balanceMonitor = new BalanceMonitor();
+    balanceMonitor.enableLocalDBUpdates();
+
+    ipc.config.id = monitorId;
+    ipc.config.retry = 1000;
     ipc.serve(
       function () {
+        ipc.server.on('online', (e, _socket) => {
+          logger.log(e);
+          updateBotReportedStatus(botID, `Online`);
+        })
         ipc.server.on(
           'connect',
           function (socket) {
@@ -91,11 +117,6 @@ const bot0Wallet = new ArbWallet({
             ipc.server.emit(
               botSocket,
               'arbs', lastArbs);
-            ipc.server.on('socket.disconnect', (socket, socketId) => {
-              botSocket = null;
-              loggerInitialBalanceUpdate = {};
-              ipc.log(`client ${socketId} has disconnected`);
-            });
           },
         );
       },
@@ -113,27 +134,28 @@ const bot0Wallet = new ArbWallet({
 
     function logBalanceUpdate(balanceUpdate: BalanceUpdate) {
       const chain = balanceUpdate.chain;
-      if (chain === CHAIN.Secret && !worker) {
+      if (chain === CHAIN.Secret && !worker && !initialBalanceWaitBotSpawn && botTargetStatus) {
         // Wait for Secret chain to update before spawning a worker.
+        initialBalanceWaitBotSpawn = true;
         spawnWorker();
       }
-      if (botSocket) {
-        logger.log(`Balance ${chain} = ${balanceUpdate.diff.toString()}`.cyan);
-      } else if (!loggerInitialBalanceUpdate[chain]) {
+      if (!loggerInitialBalanceUpdate[chain]) {
         loggerInitialBalanceUpdate[chain] = true;
-        logger.log(`Balance ${chain} = ${balanceUpdate.balances.toString()}`.cyan);
+        logger.log(`Balance (init) ${chain} = ${balanceUpdate.balances.toString()}`.cyan);
+      } else {
+        logger.log(`Balance (+/-) ${chain} = ${balanceUpdate.diff.toString()}`.cyan);
       }
     }
 
     subscribeBalances(bot0Wallet)
       .subscribe(balanceUpdate => {
-        logBalanceUpdate(balanceUpdate);
+        const trueBalanceUpdate = balanceMonitor.updateBalances(balanceUpdate.toJSON());
+        logBalanceUpdate(trueBalanceUpdate);
+        initialBalances[balanceUpdate.chain] = balanceUpdate;
         if (botSocket) {
           ipc.server.emit(
             botSocket,
-            'balance', balanceUpdate.toJSON());
-        } else {
-          initialBalances[balanceUpdate.chain] = initialBalances[balanceUpdate.chain] || balanceUpdate;
+            'balance', trueBalanceUpdate.toJSON());
         }
       }, err => logger.error(err));
 
@@ -155,7 +177,6 @@ const bot0Wallet = new ArbWallet({
     logger.log(`Started. Will connect to #${monitorId}.`);
     const balanceMonitor = new BalanceMonitor();
     const arbBuilder = new ArbBuilder(bot0Wallet, balanceMonitor);
-    balanceMonitor.enableLocalDBUpdates();
 
     ipc.connectTo(
       monitorId,
@@ -183,6 +204,7 @@ const bot0Wallet = new ArbWallet({
           function (data: ArbV1WinRaw[]) {
             !IS_TEST && arbBuilder.updateArbs(data);
           });
+        ipc.of[monitorId].emit('online', {online: true});
       },
     );
 
@@ -190,22 +212,29 @@ const bot0Wallet = new ArbWallet({
       const mover = new MoveIBC(balanceMonitor);
       let moveQ = await mover.createMoveIbcPlan({
         amount: 'max',
-        fromChain: CHAIN.Injective,
+        fromChain: CHAIN.Axelar,
         toChain: CHAIN.Osmosis,
-        token: SwapToken.INJ,
-        amountMin: BigNumber.min(0.30)
+        token: SwapToken.USDC,
+        amountMin: BigNumber.min(0)
       })
-      let moveQ2 = await mover.createMoveIbcPlan({
-        amount: BigNumber(15),
+      let moveQ2 = [] || await mover.createMoveIbcPlan({
+        amount: 'max',
         fromChain: CHAIN.Osmosis,
         toChain: CHAIN.Secret,
-        token: SwapToken.INJ,
-        amountMin: BigNumber.min(0.30)
+        token: SwapToken.stkATOM,
+        amountMin: BigNumber.min(0)
       })
-      if (!moveQ || !moveQ2) {
+      let moveQ3 = [] || await mover.createMoveIbcPlan({
+        amount: 'max',
+        fromChain: CHAIN.Axelar,
+        toChain: CHAIN.Secret,
+        token: SwapToken.USDC,
+        amountMin: BigNumber.min(0)
+      })
+      if (!moveQ || !moveQ2 || !moveQ3) {
         throw new Error('Nothing to test');
       }
-      const mq = moveQ.concat(moveQ2);
+      const mq = moveQ.concat(moveQ2).concat(moveQ3);
       logger.log(mq.map(p => p.toString()));
       await Aigle.findSeries(mq, async op => {
         let result = await op.execute(bot0Wallet, balanceMonitor);

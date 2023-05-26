@@ -1,4 +1,6 @@
 dist/
+src/utils/cached_errors/*
+!src/utils/cached_errors/here-be-cached-errors
 build/
 node_modules/
 logs

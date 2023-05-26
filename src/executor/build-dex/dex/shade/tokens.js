@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getShadeTokenBySymbol = exports.extractShadeTokenSymbolById = exports.getShadeTokenById = exports.toTokenId = void 0;
+exports.getShadeTokenBySymbol = exports.extractShadeTokenSymbol = exports.extractShadeTokenSymbolById = exports.getShadeTokenById = exports.toTokenId = void 0;
 const dex_types_1 = require("../types/dex-types");
 const lodash_1 = __importDefault(require("lodash"));
 const utils_1 = require("../../utils");
@@ -55,6 +55,7 @@ exports.extractShadeTokenSymbolById = extractShadeTokenSymbolById;
 function extractShadeTokenSymbol(shadeToken) {
     return lodash_1.default.trimStart(shadeToken.symbol.replace('stk', '_stk^').replace('st', '_st$'), 'as').replace('.axl', '').replace('-', '').replace('_st$', 'st').replace('_stk^', 'stk');
 }
+exports.extractShadeTokenSymbol = extractShadeTokenSymbol;
 function getShadeTokenBySymbol(symbol) {
     const token = lodash_1.default.find(shade_api_utils_1.tokens, (shadeToken) => {
         return extractShadeTokenSymbol(shadeToken) === symbol
