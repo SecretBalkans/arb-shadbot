@@ -63,7 +63,8 @@ export default class ArbBuilder {
       return;
     }
 
-    const comparator = (a: ArbV1WinCost, b: ArbV1WinCost) => a.id === b.id && a.lastTs === b.lastTs;
+    //blocks = [888888912, 5618751] - from arbjs to indicate blocks of last updates and know if we've updated since last swap
+    const comparator = (a: ArbV1WinCost, b: ArbV1WinCost) => a.id === b.id/* && a.blocks.join('-') === b.blocks.join('-')*/;
     const validArbs = _.differenceWith(this.arbs, Object.values(this.deferredArbs), comparator).filter(arb => !this.failedArbs[arb.id]);
     // TODO: monitor failed conditions and attempt to recover by running ArbExecutor with skipLog to prevent console spam
     const stillDeferredArbs = _.differenceWith(Object.values(this.deferredArbs), validArbs, comparator);

@@ -1,14 +1,15 @@
 import {
   Amount,
   FailReasons,
-  IArbOperationExecuteResult, IbcMoveAmountToJSON,
+  IArbOperationExecuteResult,
+  IbcMoveAmountToJSON,
   IOperationData,
   SwapOperationType,
   SwapToken
 } from './types';
-import {fetchTimeout, Logger} from '../utils';
+import {Logger} from '../utils';
 import {CHAIN, getTokenDenomInfo} from '../ibc';
-import {ArbWallet, getChainUrl, swapTypeUrlOsmo} from '../wallet/ArbWallet';
+import {ArbWallet, swapTypeUrlOsmo} from '../wallet/ArbWallet';
 import {getTokenBaseDenomInfo} from '../ibc/tokens';
 import BigNumber from 'bignumber.js';
 import _ from 'lodash';
@@ -104,26 +105,9 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
           typeUrl: swapTypeUrlOsmo,
           value: {
             'sender': sender,
-            'routes': await Aigle.map(osmosisRoute.raws.map(r => r.id) as string[], async (poolId, i) => {
-              let tokenOutDenom;
-              if (i === 0) {
-                let data = await fetchTimeout(`${getChainUrl(chainOsmosis, true)}/osmosis/gamm/v1beta1/pools/${poolId}`);
-                let denom1, denom2;
-                if (data.pool.pool_liquidity) {
-                  let {pool: {pool_liquidity: [{denom: d1}, {denom: d2}]}} = data;
-                  denom1 = d1;
-                  denom2 = d2;
-                } else {
-                  let {pool: {pool_assets: [{token: {denom: d1}}, {token: {denom: d2}}]}} = data;
-                  denom1 = d1;
-                  denom2 = d2;
-                }
-                tokenOutDenom = sentDenom === denom1 ? denom2 : denom1;
-              } else {
-                tokenOutDenom = receivedDenom;
-              }
+            'routes': osmosisRoute.raws.map(({tokenOutDenom, pool}) => {
               return ({
-                'poolId': '' + poolId,
+                'poolId': '' + pool.id,
                 'tokenOutDenom': tokenOutDenom,
               });
             }),
@@ -134,7 +118,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
             'tokenOutMinAmount': minReceivingAmountString,
           },
         }];
-        let result, lastMessage;
+        let result;
         try {
           if (msgs.length > 0) {
             result = await client.signAndBroadcast(
@@ -154,31 +138,18 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
             },
           };
         } catch (err) {
-          if (err.name !== 'SyntaxError') {
-            let log;
-            try {
-              log = JSON.parse(result?.rawLog || '');
-            } catch (err) {
-              log = result?.rawLog || result || '';
-            }
-            if (!result?.rawLog.includes('threshold')) {
-              // noinspection JSUnusedAssignment
-              this.logger.error(err, result);
-            }
-            this.shouldLogInDetails && this.logger.error('Unknown swap error'.red, JSON.stringify({
-              log,
-              msg: msgs[0] || lastMessage,
-              err: {message: err.message, stack: err.stack},
-            }));
-          } else {
-            this.shouldLogInDetails && this.logger.error('Swap chain error'.red, JSON.stringify({
-              log: JSON.parse(result?.rawLog || ''),
-              msgs,
-            }));
-          }
           return {
             success: false,
-            result: null,
+            result: {
+              internal: {
+                msg: msgs[0],
+                code: result?.code,
+                height: result?.height,
+                tx: result?.transactionHash
+              },
+              data: result?.rawLog || 'No tx result',
+              reason: FailReasons.Unhandled
+            },
           };
         }
       case 'shade':

@@ -32,7 +32,7 @@ import {
   makeIBCMinimalDenom
 } from "../executor/build-dex/utils";
 import {initShadeTokens, getPairsRaw} from "../executor/build-dex/dex/shade/shade-api-utils";
-import { getShadeTokenBySymbol } from '../executor/build-dex/dexSdk';
+import {getShadeTokenBySymbol} from '../executor/build-dex/dexSdk';
 
 export const swapTypeUrlOsmo = '/osmosis.gamm.v1beta1.MsgSwapExactAmountIn';
 
@@ -517,7 +517,10 @@ export class ArbWallet {
             token,
             denomInfo: getTokenDenomInfo(SwapTokenMap[token], true),
             amount: await promise
-          }));
+          })).catch((e) => {
+          this.isFetchingSecret = false;
+          throw e;
+        });
         this.isFetchingSecret = false;
       }
     }

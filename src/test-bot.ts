@@ -239,9 +239,9 @@ const bot0Wallet = new ArbWallet({
       await Aigle.findSeries(mq, async op => {
         let result = await op.execute(bot0Wallet, balanceMonitor);
         if (!result.success) {
-          // exit on first error
           logger.error(result.result);
-          return false;
+          // exit on first error
+          return true;
         }
       })
     }

@@ -56,12 +56,12 @@ const chainInfos = (
         OSMOSIS_RPC_OVERWRITE ??
         (IS_TESTNET
           ? 'https://rpc.testnet.osmosis.zone/'
-          : 'https://osmosis-rpc.polkachu.com'),
+          : 'https://rpc.osmosis.interbloc.org'),
       rest:
         OSMOSIS_REST_OVERWRITE ??
         (IS_TESTNET
           ? 'https://lcd.testnet.osmosis.zone/'
-          : 'https://osmosis-lcd.quickapi.com:443'),
+          : 'https://api.osmosis.interbloc.org'),
       chainId:
         OSMOSIS_CHAIN_ID_OVERWRITE ??
         (IS_TESTNET ? 'osmo-test-4' : 'osmosis-1'),
@@ -196,7 +196,7 @@ const chainInfos = (
     },
     {
       rpc: 'https://rpc.secret.express',
-      rest: 'https://lcd-secret.keplr.app',
+      rest: 'https://1rpc.io/scrt-lcd',
       //rest: 'https://lcd-secret.whispernode.com:443', // dead
       // rest: "https://api.scrt.network/",
       chainId: 'secret-4',
@@ -216,7 +216,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.035,
+            low: 0.0125,
             average: 0.1,
             high: 0.25,
           },
