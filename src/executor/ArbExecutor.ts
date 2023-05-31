@@ -92,7 +92,7 @@ export class ArbExecutor {
         tokenReceived: this.arb.token0,
         tokenAmountIn: bridgePlan[bridgePlan.length - 1],
       }),
-      dexChain0 !== CHAIN.Osmosis && new BalanceWaitOperation({
+      dexChain1 !== CHAIN.Osmosis && new BalanceWaitOperation({
         chain: dexChain1,
         token: this.arb.token0,
         isWrapped: dexChain1 === CHAIN.Secret,
