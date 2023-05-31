@@ -16,7 +16,6 @@ import {StdFee} from '@cosmjs/stargate';
 import {MsgTransfer} from 'cosmjs-types/ibc/applications/transfer/v1/tx';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {getGasFeeInfo} from "./utils";
-import {ArbOperationSequenced} from "./aArbOperation";
 import InjectiveClient from "../wallet/clients/InjectiveClient";
 import * as injectiveTs from '@injectivelabs/sdk-ts'
 import {ChainRestTendermintApi} from '@injectivelabs/sdk-ts'
@@ -24,6 +23,7 @@ import {BigNumberInBase} from "@injectivelabs/utils";
 import {toBase64} from "@cosmjs/encoding";
 import {CHAIN, getChainByChainId, getTokenDenomInfo} from "../ibc";
 import {convertCoinToUDenomV2, makeIBCMinimalDenom} from "./build-dex/utils";
+import {AArbOperationSequenced} from "./aArbOperationSequenced";
 
 function getTimeoutTimestamp() {
   const timeoutInMinutes = 15;
@@ -38,7 +38,7 @@ function getTimeoutTimestamp() {
 }
 
 
-export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType> {
+export class IBCTransferOperation extends AArbOperationSequenced<IBCOperationType> {
   type() {
     return 'IBC';
   };
@@ -59,7 +59,7 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
 
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean, result: IArbOperationExecuteResult<IBCOperationType> }> {
     // Resolve amount if it depends on other operations before doing an IBC transfer
-    let resolvedAmount = await this.resolveArbOperationAmount({
+    const resolvedAmount = await this.resolveArbOperationAmount({
       amount: this.data.amount,
       token: this.data.token
     }, arbWallet, balanceMonitor);
@@ -130,11 +130,11 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
     } else {
       sentTokenDenom = makeIBCMinimalDenom(sourceChannel, chainDenom);
     }
-    let sentAmountString = convertCoinToUDenomV2(amount, sentTokenDecimals).toFixed(0);
+    const sentAmountString = convertCoinToUDenomV2(amount, sentTokenDecimals).toFixed(0);
 
     if (isWrapped) { // always isWrapped when using Axlr
       if (from === CHAIN.Axelar && to === CHAIN.Secret) {
-        //http://secretnetwork-mainnet-lcd.autostake.com:1317/ibc/core/channel/v1/channels?pagination.limit=1000
+        // http://secretnetwork-mainnet-lcd.autostake.com:1317/ibc/core/channel/v1/channels?pagination.limit=1000
         /**
          * {
          *       "state": "STATE_OPEN",
@@ -157,9 +157,9 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
       } else if (from === CHAIN.Secret && to === CHAIN.Axelar) {
         let result;
         try {
-          //http://secretnetwork-mainnet-lcd.autostake.com:1317/ibc/core/channel/v1/channels?pagination.limit=1000
+          // http://secretnetwork-mainnet-lcd.autostake.com:1317/ibc/core/channel/v1/channels?pagination.limit=1000
           const icsChannel = 'channel-61' // to axelar
-          let opMessage = `secret IBC transfer ${amount} ${token} from (${from}/${senderSafe}) to (${to}/${receiverSafe}) (ics.${icsChannel} using contract secret1yxjmepvyl2c25vnt53cr2dpn8amknwausxee83)`;
+          const opMessage = `secret IBC transfer ${amount} ${token} from (${from}/${senderSafe}) to (${to}/${receiverSafe}) (ics.${icsChannel} using contract secret1yxjmepvyl2c25vnt53cr2dpn8amknwausxee83)`;
           this.logger.log(`Will execute ${opMessage}`);
           result = await arbWallet.executeSecretContract({
             contractAddress: arbWallet.getSecretAddress(token).address,
@@ -217,7 +217,8 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
       }, 0.015, 130000)
     }
 */
-    let unsignedTransferMsg, fee: StdFee;
+    let unsignedTransferMsg;
+    let fee: StdFee;
 // if (sentTokenDenom.startsWith('cw20')) {
 //   // noinspection SpellCheckingInspection
 //   unsignedTransferMsg = {
@@ -281,7 +282,8 @@ export class IBCTransferOperation extends ArbOperationSequenced<IBCOperationType
       gas: '350000',
     };
 // }
-    let txnStatus, error;
+    let txnStatus;
+    let error;
     for (let i = 0; i < 3; i++) {
       try {
         if (from === CHAIN.Injective) {

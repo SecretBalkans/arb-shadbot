@@ -2,7 +2,7 @@ import {CHAIN, getChainByChainId, getChainInfo} from '../ibc';
 import {Observable} from 'rxjs';
 import {filter, map} from 'rxjs/operators';
 import cosmosObserver from '../wallet/CosmosObserver';
-import {ArbWallet, BalanceMap, SerializedBalances} from '../wallet/ArbWallet';
+import {ArbWallet} from '../wallet/ArbWallet';
 import _ from 'lodash';
 import {Logger} from '../utils';
 import EventEmitter from 'events';
@@ -11,32 +11,9 @@ import {MAX_IBC_FINISH_WAIT_TIME_DEFAULT} from '../executor/MoveIBC';
 import {execute} from "../graphql/gql-execute";
 import gql from 'graphql-tag';
 import {Amount, SwapToken, SwapTokenMap, Token} from "../executor/build-dex/dexSdk";
+import {BalanceMap} from "./BalanceMap";
+import {BalanceUpdate, SerializedBalanceUpdate} from "./BalanceUpdate";
 
-export interface SerializedBalanceUpdate {
-  chain: CHAIN,
-  balances: SerializedBalances,
-  diff: SerializedBalances,
-}
-
-export class BalanceUpdate {
-  chain: CHAIN;
-  balances: BalanceMap;
-  diff: BalanceMap;
-
-  constructor({chain, balances, diff}: { chain: CHAIN, balances: BalanceMap, diff: BalanceMap }) {
-    this.chain = chain;
-    this.balances = balances;
-    this.diff = diff;
-  }
-
-  toJSON(): SerializedBalanceUpdate {
-    return {
-      chain: this.chain,
-      balances: this.balances.toJSON(),
-      diff: this.diff.toJSON(),
-    };
-  }
-}
 
 const logger = new Logger('BalancesInternal');
 
@@ -84,7 +61,7 @@ export interface CanLog {
 export class BalanceMonitor implements CanLog {
   private readonly balances: Partial<Record<CHAIN, BalanceMap>> = {};
   logger: Logger;
-  private enabledLocalDBUpdate: Boolean;
+  private enabledLocalDBUpdate: boolean;
 
   constructor() {
     this.logger = new Logger('BalanceMonitor');
@@ -108,8 +85,8 @@ export class BalanceMonitor implements CanLog {
       this.balances[balanceUpdate.chain] = BalanceMap.fromSerializedBalanceUpdate(balanceUpdate);
       realBalanceUpdate = new BalanceUpdate({
         chain: balanceUpdate.chain,
-        balances: BalanceMap.fromSerializedBalanceUpdate(balanceUpdate),
-        diff: BalanceMap.fromSerializedBalanceUpdate(balanceUpdate)
+        balances: this.balances[balanceUpdate.chain],
+        diff: this.balances[balanceUpdate.chain]
       });
     } else {
       realBalanceUpdate = this.balances[balanceUpdate.chain].updateBalanceMap(balanceUpdate);
@@ -126,10 +103,10 @@ export class BalanceMonitor implements CanLog {
       this.logger.log('Enabled local db bot balance updates!'.green);
       this.enabledLocalDBUpdate = true;
       this._internalEvents.on('balanceUpdate.chain', (chain: CHAIN) => {
-        let balanceObject = {
+        const balanceObject = {
           balances: _(this.balances[chain].tokenBalances).map((val) => {
-            let amount = val.amount.toFixed(val.denomInfo.decimals);
-            let token = SwapTokenMap[val.token];
+            const amount = val.amount.toFixed(val.denomInfo.decimals);
+            const token = SwapTokenMap[val.token];
             if (val.denomInfo.isWrapped && (token === SwapToken.SCRT || getChainByChainId(val.denomInfo.chainId) !== CHAIN.Secret)) {
               return [`s${token}`, amount];
             } else {
@@ -151,6 +128,7 @@ export class BalanceMonitor implements CanLog {
           let message = err.message;
           try {
             message = JSON.parse(err.message.replace('Fetch error: ', '')).message;
+            // tslint:disable-next-line:no-empty
           } catch {
           }
           this.logger.debugOnce('local.gql.updates', message);
@@ -169,7 +147,7 @@ export class BalanceMonitor implements CanLog {
     isBalanceCheck?: boolean
   } = {}): Promise<Amount | false> {
     const swapToken = SwapTokenMap[token];
-    let tokenAmount = this.getTokenAmount(chain, swapToken, isWrapped);
+    const tokenAmount = this.getTokenAmount(chain, swapToken, isWrapped);
      if (isBalanceCheck) {
       return tokenAmount || BigNumber(0);
     }
@@ -182,9 +160,9 @@ export class BalanceMonitor implements CanLog {
         this.logger.log(`Waiting for ${isBalanceCheck ? 'balance' : 'deposit'} of ${isWrapped ? 's': ''}${token} on ${chain}...`.blue);
         const listener = (balanceUpdate: BalanceUpdate) => {
           const prop = isBalanceCheck ? 'balances' : 'diff';
-          let amount = this.getTokenInfoInternal(balanceUpdate[prop].tokenBalances, swapToken,isWrapped)?.amount;
-          if (balanceUpdate.chain === chain && amount?.isGreaterThan(0)) {
-            this._internalEvents.removeListener('balanceUpdate.serialized', listener);
+          const amount = this.getTokenInfoInternal(balanceUpdate[prop].tokenBalances, swapToken,isWrapped)?.amount;
+          if (balanceUpdate.chain === chain) {
+            this._internalEvents.removeListener('balanceUpdate', listener);
             resolve(amount);
           }
           return false;

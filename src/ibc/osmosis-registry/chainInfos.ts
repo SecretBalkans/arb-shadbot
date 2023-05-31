@@ -1,3 +1,4 @@
+/* tslint:disable */
 import { AppCurrency, ChainInfo } from '@keplr-wallet/types';
 import _ from 'lodash';
 import { Logger } from '../../utils';
@@ -56,12 +57,12 @@ const chainInfos = (
         OSMOSIS_RPC_OVERWRITE ??
         (IS_TESTNET
           ? 'https://rpc.testnet.osmosis.zone/'
-          : 'https://rpc.osmosis.interbloc.org'),
+          : 'https://osmosis-rpc.quickapi.com:443'),
       rest:
         OSMOSIS_REST_OVERWRITE ??
         (IS_TESTNET
           ? 'https://lcd.testnet.osmosis.zone/'
-          : 'https://api.osmosis.interbloc.org'),
+          : 'https://osmosis-mainnet-lcd.autostake.com:443'),
       chainId:
         OSMOSIS_CHAIN_ID_OVERWRITE ??
         (IS_TESTNET ? 'osmo-test-4' : 'osmosis-1'),
@@ -196,8 +197,8 @@ const chainInfos = (
     },
     {
       rpc: 'https://rpc.secret.express',
-      rest: 'https://1rpc.io/scrt-lcd',
-      //rest: 'https://lcd-secret.whispernode.com:443', // dead
+      rest: 'https://lcd.secret.express',
+      // rest: 'https://lcd-secret.whispernode.com:443', // dead
       // rest: "https://api.scrt.network/",
       chainId: 'secret-4',
       chainName: 'Secret Network',
@@ -216,7 +217,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.0125,
+            low: 0.05,
             average: 0.1,
             high: 0.25,
           },

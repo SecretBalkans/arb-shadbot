@@ -71,6 +71,7 @@ export interface AmountOperationResult {
   amount: Amount;
 }
 
+// tslint:disable-next-line:no-empty-interface
 export interface SwapOperationResult extends AmountOperationResult {
 }
 
@@ -82,6 +83,7 @@ export interface IBCOperationData {
   isWrapped?: boolean
 }
 
+// tslint:disable-next-line:no-empty-interface
 export interface IBCOperationResult extends AmountOperationResult{
 }
 
@@ -91,6 +93,7 @@ export interface BalanceCheckOperationData extends BalanceWaitOperationData {
   amountMax: IbcMoveAmount | ArbOperation<SwapMoveOperationsType>;
 }
 
+// tslint:disable-next-line:no-empty-interface
 export interface BalanceCheckOperationResult extends AmountOperationResult {
 }
 

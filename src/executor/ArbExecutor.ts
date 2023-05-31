@@ -9,6 +9,7 @@ import {CHAIN, getDexOriginChain} from "../ibc";
 import {SwapOperation} from "./SwapOperation";
 import {BalanceWaitOperation} from "./BalanceWaitOperation";
 import {Logger} from "../utils";
+import _ from "lodash";
 
 export class ArbExecutor {
   public failedReason: IFailingArbInfo;
@@ -35,7 +36,7 @@ export class ArbExecutor {
 
   private async executeOperationsQ(operationsQ: ArbOperation<SwapMoveOperationsType>[], arbWallet: ArbWallet, balanceMonitor: BalanceMonitor) {
     await Aigle.findSeries(operationsQ, async op => {
-      let result = await op.execute(arbWallet, balanceMonitor);
+      const result = await op.execute(arbWallet, balanceMonitor);
       if (!result.success) {
         this.markFailing(result.result as IFailingArbInfo);
       }
@@ -63,13 +64,13 @@ export class ArbExecutor {
       // Means we do not have funds on any chain
       return []
     }
-    let swapPlan0 = [new SwapOperation({
+    const swapPlan0 = [new SwapOperation({
       dex: this.arb.dex0,
       tokenSent: this.arb.token0,
       route: this.arb.route0,
       tokenReceived: this.arb.token1,
       tokenAmountIn: preparationPlan[preparationPlan.length - 1],
-    }), new BalanceWaitOperation({
+    }), dexChain0 !== CHAIN.Osmosis && new BalanceWaitOperation({
       token: this.arb.token1,
       isWrapped: dexChain0 === CHAIN.Secret,
       chain: dexChain0
@@ -91,18 +92,18 @@ export class ArbExecutor {
         tokenReceived: this.arb.token0,
         tokenAmountIn: bridgePlan[bridgePlan.length - 1],
       }),
-      new BalanceWaitOperation({
+      dexChain0 !== CHAIN.Osmosis && new BalanceWaitOperation({
         chain: dexChain1,
         token: this.arb.token0,
         isWrapped: dexChain1 === CHAIN.Secret,
       })
     ]
-    return [
+    return _.compact([
       ...preparationPlan,
       ...swapPlan0,
       ...bridgePlan,
       ...swapPlan1,
-    ];
+    ]);
   }
 
   markFailing(failReason: IFailingArbInfo) {

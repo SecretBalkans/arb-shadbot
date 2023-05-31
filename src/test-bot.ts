@@ -1,4 +1,4 @@
-import {BalanceMonitor, BalanceUpdate, SerializedBalanceUpdate, subscribeBalances} from './balances/BalanceMonitor';
+import {BalanceMonitor, subscribeBalances} from './balances/BalanceMonitor';
 import {CHAIN, SUPPORTED_CHAINS} from './ibc';
 import {Logger} from './utils';
 import ipc from 'node-ipc';
@@ -15,6 +15,7 @@ import Aigle from "aigle";
 import {SwapToken} from "./executor/build-dex/dex/types/dex-types";
 import {ArbV1WinRaw} from "./executor/types";
 import {subscribeBotStatus, updateBotReportedStatus, updateSupervisorReportedTs} from "./graphql/gql-execute";
+import {BalanceUpdate, SerializedBalanceUpdate} from "./balances/BalanceUpdate";
 
 const IS_TEST = 0;
 
@@ -24,8 +25,8 @@ let logger;
 ipc.config.appspace = 'shad';
 
 ipc.config.silent = true;
-ipc.config.logInColor = false; //default
-ipc.config.logDepth = 1; //default
+ipc.config.logInColor = false; // default
+ipc.config.logDepth = 1; // default
 
 const monitorId = 'BalanceMonitor';
 const botID = 'dea2ae0b-9909-4c79-8e31-a9376957c3f6';
@@ -47,10 +48,12 @@ const bot0Wallet = new ArbWallet({
 
   if (cluster.isPrimary) {
 
-    let worker, initialBalanceWaitBotSpawn;
+    let worker;
+    let initialBalanceWaitBotSpawn;
     let botSocket;
     let loggerInitialBalanceUpdate = {};
-    let initialBalances: Record<string, BalanceUpdate> = {};
+    const initialBalances: Record<string, BalanceUpdate> = {};
+
     function spawnWorker() {
       worker = cluster.fork();
       updateBotReportedStatus(botID, `Starting...`);
@@ -88,7 +91,8 @@ const bot0Wallet = new ArbWallet({
         spawnWorker();
       }
     })
-    let prices, lastArbs: ArbV1WinRaw[];
+    let prices;
+    let lastArbs: ArbV1WinRaw[];
     logger = new Logger('BalanceMonitor');
     ipc.config.logger = (msg) => logger.log(msg.gray);
     const balanceMonitor = new BalanceMonitor();
@@ -97,14 +101,14 @@ const bot0Wallet = new ArbWallet({
     ipc.config.id = monitorId;
     ipc.config.retry = 1000;
     ipc.serve(
-      function () {
+      () => {
         ipc.server.on('online', (e, _socket) => {
           logger.log(e);
           updateBotReportedStatus(botID, `Online`);
         })
         ipc.server.on(
           'connect',
-          function (socket) {
+          socket => {
             botSocket = socket;
             Object.values(initialBalances).forEach((b: BalanceUpdate) => {
               ipc.server.emit(
@@ -149,9 +153,12 @@ const bot0Wallet = new ArbWallet({
 
     subscribeBalances(bot0Wallet)
       .subscribe(balanceUpdate => {
+        // make sure we go through our local balance monitor that keeps cached balances
+        // we will optimistically assume that balances that do not appear (might be because of rpc errors)
+        // are still there.
         const trueBalanceUpdate = balanceMonitor.updateBalances(balanceUpdate.toJSON());
         logBalanceUpdate(trueBalanceUpdate);
-        initialBalances[balanceUpdate.chain] = balanceUpdate;
+        initialBalances[trueBalanceUpdate.chain] = trueBalanceUpdate;
         if (botSocket) {
           ipc.server.emit(
             botSocket,
@@ -175,56 +182,59 @@ const bot0Wallet = new ArbWallet({
     logger = new Logger(`Bot#${workerId}`);
     ipc.config.logger = (msg) => logger.log(msg.gray);
     logger.log(`Started. Will connect to #${monitorId}.`);
-    const balanceMonitor = new BalanceMonitor();
-    const arbBuilder = new ArbBuilder(bot0Wallet, balanceMonitor);
+    const botBalanceMonitor = new BalanceMonitor();
+    const arbBuilder = new ArbBuilder(bot0Wallet, botBalanceMonitor);
 
     ipc.connectTo(
       monitorId,
-      function () {
-        IS_TEST && setTimeout(() => {
-          test().catch(err => {
-            logger.error(err);
-            debugger;
-          });
-        }, 100);
+      () => {
+        if (IS_TEST) {
+          setTimeout(() => {
+            test().catch(err => {
+              logger.error(err);
+            });
+          }, 100);
+        }
         ipc.of[monitorId].on(
           'balance',
-          function (data: SerializedBalanceUpdate) {
-            balanceMonitor.updateBalances(data);
+          (data: SerializedBalanceUpdate) => {
+            botBalanceMonitor.updateBalances(data);
           },
         );
         ipc.of[monitorId].on(
           'prices',
-          function (data: Prices) {
+          (data: Prices) => {
             arbBuilder.updatePrices(data);
           },
         );
         ipc.of[monitorId].on(
           'arbs',
-          function (data: ArbV1WinRaw[]) {
-            !IS_TEST && arbBuilder.updateArbs(data);
+          (data: ArbV1WinRaw[]) => {
+            if (!IS_TEST) {
+              arbBuilder.updateArbs(data)
+            }
           });
         ipc.of[monitorId].emit('online', {online: true});
       },
     );
 
     async function test() {
-      const mover = new MoveIBC(balanceMonitor);
-      let moveQ = await mover.createMoveIbcPlan({
+      const mover = new MoveIBC(botBalanceMonitor);
+      const moveQ = await mover.createMoveIbcPlan({
         amount: 'max',
-        fromChain: CHAIN.Axelar,
+        fromChain: CHAIN.Injective,
         toChain: CHAIN.Osmosis,
-        token: SwapToken.USDC,
+        token: SwapToken.INJ,
         amountMin: BigNumber.min(0)
       })
-      let moveQ2 = [] || await mover.createMoveIbcPlan({
+      const moveQ2 = [] || await mover.createMoveIbcPlan({
         amount: 'max',
         fromChain: CHAIN.Osmosis,
         toChain: CHAIN.Secret,
         token: SwapToken.stkATOM,
         amountMin: BigNumber.min(0)
       })
-      let moveQ3 = [] || await mover.createMoveIbcPlan({
+      const moveQ3 = [] || await mover.createMoveIbcPlan({
         amount: 'max',
         fromChain: CHAIN.Axelar,
         toChain: CHAIN.Secret,
@@ -237,7 +247,7 @@ const bot0Wallet = new ArbWallet({
       const mq = moveQ.concat(moveQ2).concat(moveQ3);
       logger.log(mq.map(p => p.toString()));
       await Aigle.findSeries(mq, async op => {
-        let result = await op.execute(bot0Wallet, balanceMonitor);
+        const result = await op.execute(bot0Wallet, botBalanceMonitor);
         if (!result.success) {
           logger.error(result.result);
           // exit on first error

@@ -9,10 +9,10 @@ const bignumber_js_1 = __importDefault(require("bignumber.js"));
 const buffer_1 = require("buffer");
 const crypto_1 = require("@cosmjs/crypto");
 const convertCoinToUDenomV2 = (input, decimals) => {
-    return typeof input === 'string' || typeof input === 'number' ?
+    return (0, bignumber_js_1.default)(typeof input === 'string' || typeof input === 'number' ?
         (0, bignumber_js_1.default)(input)
             .multipliedBy((0, bignumber_js_1.default)(10).pow(decimals)) :
-        (0, bignumber_js_1.default)(input.toString()).multipliedBy((0, bignumber_js_1.default)(10).pow(decimals));
+        (0, bignumber_js_1.default)(input.toString()).multipliedBy((0, bignumber_js_1.default)(10).pow(decimals)).toFixed(0));
 };
 exports.convertCoinToUDenomV2 = convertCoinToUDenomV2;
 const convertCoinFromUDenomV2 = (input, decimals) => (bignumber_js_1.default.config({

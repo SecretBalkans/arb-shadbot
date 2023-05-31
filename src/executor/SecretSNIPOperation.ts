@@ -9,12 +9,12 @@ import {
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
 import {CHAIN} from '../ibc';
-import {ArbOperationSequenced} from './aArbOperation';
 import BigNumber from "bignumber.js";
 import {getGasFeeInfo} from "./utils";
 import {convertCoinToUDenomV2} from "./build-dex/utils";
+import {AArbOperationSequenced} from "./aArbOperationSequenced";
 
-export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperationType> {
+export class SecretSNIPOperation extends AArbOperationSequenced<SecretSNIPOperationType> {
   constructor(data: IOperationData<SecretSNIPOperationType>, shouldLogInDetails: boolean = true) {
     super(data, shouldLogInDetails);
   }
@@ -23,7 +23,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
     return IbcMoveAmountToJSON(this.data.amount)
   }
   override async executeInternal(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: boolean; result: IArbOperationExecuteResult<SecretSNIPOperationType> }> {
-    let resolvedAmount = await this.resolveArbOperationAmount({
+    const resolvedAmount = await this.resolveArbOperationAmount({
       amount: this.data.amount,
       token: this.data.token
     }, arbWallet, balanceMonitor);
@@ -37,10 +37,10 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
         }
       };
     }
-    let secretAddress = arbWallet.getSecretAddress(this.data.token);
+    const secretAddress = arbWallet.getSecretAddress(this.data.token);
     let result;
-    let amountString = convertCoinToUDenomV2(resolvedAmount, secretAddress.decimals).toString();
-    let denom = this.data.token === 'SCRT' ? 'uscrt' as Denom : arbWallet.makeIBCHash(SwapTokenMap[this.data.token], CHAIN.Secret) as string as Denom;
+    const amountString = convertCoinToUDenomV2(resolvedAmount, secretAddress.decimals).toString();
+    const denom = this.data.token === 'SCRT' ? 'uscrt' as Denom : arbWallet.makeIBCHash(SwapTokenMap[this.data.token], CHAIN.Secret) as string as Denom;
     if (this.data.wrap) {
       this.logger.log(`Wrap ${resolvedAmount} ${this.data.token}`.blue);
       result = await arbWallet.executeSecretContract({
@@ -50,7 +50,7 @@ export class SecretSNIPOperation extends ArbOperationSequenced<SecretSNIPOperati
         gasPrice: getGasFeeInfo(CHAIN.Secret).feeCurrency.gasPriceStep.low,
         gasLimit: 60_000,
         sentFunds: [{
-          denom: denom,
+          denom,
           amount: amountString
         }]
       });

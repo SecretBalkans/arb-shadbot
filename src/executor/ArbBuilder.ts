@@ -24,13 +24,13 @@ export default class ArbBuilder {
   private arbs: ArbV1WinCost[];
   prices: Prices;
   logger: Logger;
-  ARB_THRESHOLD: number = 0.1;
+  ARB_THRESHOLD: number = 0.35;
   deferredArbs: Record<string, ArbV1WinCost> = {};
   failedArbs: Record<string, IArbOperationExecuteResult<SwapOperationType> | true> = {};
   isWaitingForArb: boolean;
 
   constructor(public readonly arbWallet: ArbWallet, private readonly balanceMonitor: BalanceMonitor) {
-    this.logger = new Logger('ArbExecutor');
+    this.logger = new Logger('ArbExecutor', true);
   }
 
   updatePrices(prices: Prices) {
@@ -40,7 +40,7 @@ export default class ArbBuilder {
   updateArbs(arbs: ArbV1WinRaw[]) {
     this.arbs = _.map(arbs, raw => {
       const arb: ArbV1Win = {...parseRawArbV1BigNumber(raw), amountWin: BigNumber(raw.amount_win)};
-      let amountWin = BigNumber(arb.amountWin);
+      const amountWin = BigNumber(arb.amountWin);
       const winUsd = amountWin.multipliedBy(this.getPrice(arb.token0 as Token));
       const bridgePrice = this.estimateBridgePrice(arb);
       return {
@@ -63,7 +63,7 @@ export default class ArbBuilder {
       return;
     }
 
-    //blocks = [888888912, 5618751] - from arbjs to indicate blocks of last updates and know if we've updated since last swap
+    // blocks = [888888912, 5618751] - from arbjs to indicate blocks of last updates and know if we've updated since last swap
     const comparator = (a: ArbV1WinCost, b: ArbV1WinCost) => a.id === b.id/* && a.blocks.join('-') === b.blocks.join('-')*/;
     const validArbs = _.differenceWith(this.arbs, Object.values(this.deferredArbs), comparator).filter(arb => !this.failedArbs[arb.id]);
     // TODO: monitor failed conditions and attempt to recover by running ArbExecutor with skipLog to prevent console spam
@@ -87,7 +87,7 @@ export default class ArbBuilder {
     if (price) {
       return BigNumber(price);
     } else {
-      this.logger.debugOnce(`Unsupported price token ${token}`.red);
+      this.logger.debugCachedOnce(`Unsupported price token ${token}`.red);
       return BigNumber(0);
     }
   }
@@ -129,7 +129,8 @@ export default class ArbBuilder {
 
   private deferCurrentArb(currentArb: ArbExecutor) {
     this.deferredArbs[currentArb.id] = currentArb.arb;
-    this.deferredArbs[currentArb.reverseId] = currentArb.arb;
+    // this.deferredArbs[currentArb.reverseId] = currentArb.arb;
+
     // TODO: modify local arbs optimistically depending on currentArb result
     //  so we do not choose the same arb again if it is not winning anymore
     // i.e. remove arbWin from this.arbs, but make sure this.arbs has

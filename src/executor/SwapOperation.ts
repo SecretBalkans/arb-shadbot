@@ -16,13 +16,13 @@ import _ from 'lodash';
 import {getGasFeeInfo} from './utils';
 import Aigle from 'aigle';
 import {toBase64} from '@cosmjs/encoding';
-import {ArbOperationSequenced} from './aArbOperation';
 import {BalanceMonitor} from "../balances/BalanceMonitor";
 
 import calculateTokenSwap, {SwapTokenMap} from "./build-dex/dexSdk"
 import {ShadeContractJson, ShadeRouteSegmentInfo} from "./build-dex/dex/shade/types";
 import {convertCoinToUDenomV2} from './build-dex/utils';
 import {OsmosisRoute} from './build-dex/dex/osmosis/types';
+import {AArbOperationSequenced} from "./aArbOperationSequenced";
 
 function getLog({rawLog}: { rawLog: string }) {
   try {
@@ -32,7 +32,7 @@ function getLog({rawLog}: { rawLog: string }) {
   }
 }
 
-export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
+export class SwapOperation extends AArbOperationSequenced<SwapOperationType> {
 
   logger: Logger;
 
@@ -74,20 +74,19 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
     const slippage = 0.02;
 
     const bigNumberAmountSent = amount;
-    let expectedReturn = calculateTokenSwap(this.data.dex, this.data.tokenSent, this.data.tokenReceived, this.data.route, amount);
-    let minReceivingAmountString = convertCoinToUDenomV2(expectedReturn.multipliedBy(1 - slippage), receivedDenomInfo.decimals).toFixed(0);
-    let sentAmountString = convertCoinToUDenomV2(bigNumberAmountSent, tokenDenomInfo.decimals).toFixed(0);
+    const expectedReturn = calculateTokenSwap(this.data.dex, this.data.tokenSent, this.data.tokenReceived, this.data.route, amount);
+    const minReceivingAmountString = convertCoinToUDenomV2(expectedReturn.multipliedBy(1 - slippage), receivedDenomInfo.decimals).toFixed(0);
+    const sentAmountString = convertCoinToUDenomV2(bigNumberAmountSent, tokenDenomInfo.decimals).toFixed(0);
     this.logger.log(`Swap ${bigNumberAmountSent.toNumber()} (${sentAmountString}) ${this.token0} > ${expectedReturn.toNumber()} (${minReceivingAmountString}) ${this.token1} in ${this.data.dex}`);
     switch (this.data.dex) {
       case 'osmosis':
         const chainOsmosis = CHAIN.Osmosis;
         const client = await arbWallet.getClient(chainOsmosis);
 
-        let sentDenom = arbWallet.makeIBCHash(SwapTokenMap[this.token0], CHAIN.Osmosis),
-          receivedDenom = arbWallet.makeIBCHash(SwapTokenMap[this.token1], CHAIN.Osmosis);
+        const sentDenom = arbWallet.makeIBCHash(SwapTokenMap[this.token0], CHAIN.Osmosis)
 
-      function getOsmoResult(result, token: SwapToken): Amount {
-        return BigNumber(_.findLast(_.find(getLog(result).events, {type: 'coin_spent'}).attributes, {key: 'amount'}).value.match(/\d+/)[0]).dividedBy(10 ** getTokenBaseDenomInfo(SwapTokenMap[token]).decimals);
+      function getOsmoResult(txLogResult, token: SwapToken): Amount {
+        return BigNumber(_.findLast(_.find(getLog(txLogResult).events, {type: 'coin_spent'}).attributes, {key: 'amount'}).value.match(/\d+/)[0]).dividedBy(10 ** getTokenBaseDenomInfo(SwapTokenMap[token]).decimals);
       }
 
         const osmosisRoute = this.data.route as OsmosisRoute;
@@ -158,13 +157,13 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
         // noinspection SpellCheckingInspection
         const routerAddress = 'secret1pjhdug87nxzv0esxasmeyfsucaj98pw4334wyc';
         const shadeRoute = this.data.route as ShadeRouteSegmentInfo[];
-        let firstSegmentInfo = shadeRoute[0] as ShadeRouteSegmentInfo;
+        const firstSegmentInfo = shadeRoute[0] as ShadeRouteSegmentInfo;
         const swapTokenAddress = firstSegmentInfo.t0.symbol === this.token0 ? firstSegmentInfo.t0.contract_address : firstSegmentInfo.t1.contract_address;
         // noinspection JSUnusedLocalSymbols
         const apContractPath = await Aigle.map<ShadeRouteSegmentInfo, ShadeContractJson>(shadeRoute, async (route) => {
           return route.raw.contract;
         });
-        const raw_msg = JSON.stringify(
+        const rawMsg = JSON.stringify(
           {
             swap_tokens_for_exact: {
               expected_return: minReceivingAmountString,
@@ -175,7 +174,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
         const gasPrice: number = getGasFeeInfo(CHAIN.Secret).amount;
         let tx;
         try {
-          let msg = toBase64(Buffer.from(raw_msg, 'ascii'));
+          const msg = toBase64(Buffer.from(rawMsg, 'ascii'));
           tx = await arbWallet.executeSecretContract(
             {
               contractAddress: swapTokenAddress, msg: {
@@ -196,7 +195,7 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
           if (err.code === 5 && err.message.includes('tx not found')) {
             this.logger.log(err.message, 'will continue after shade swap optimistically');
           }
-          let txHashPart = err.message.split('tx not found: ')[1].split(': key not found')[0];
+          const txHashPart = err.message.split('tx not found: ')[1].split(': key not found')[0];
           return {
             success: true,
             result: {
@@ -207,8 +206,8 @@ export class SwapOperation extends ArbOperationSequenced<SwapOperationType> {
           }
         }
         try {
-          let findLast = _.findLast(tx.arrayLog, {key: "amount_out"});
-          let token1ReturnAmount = convertCoinToUDenomV2(findLast?.value, getTokenDenomInfo(SwapTokenMap[this.token1]).decimals);
+          const findLast = _.findLast(tx.arrayLog, {key: "amount_out"});
+          const token1ReturnAmount = convertCoinToUDenomV2(findLast?.value, getTokenDenomInfo(SwapTokenMap[this.token1]).decimals);
           return {
             success: true,
             result: {

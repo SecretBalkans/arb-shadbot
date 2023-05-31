@@ -5,12 +5,12 @@ import {
   IFailingArbInfo,
   IOperationData,
   IOperationResult,
-  SwapMoveOperationsType, SwapToken
+  SwapMoveOperationsType,
+  SwapToken
 } from './types';
 import {Logger, safeJsonStringify} from '../utils';
 import {ArbWallet} from '../wallet/ArbWallet';
 import {BalanceMonitor} from '../balances/BalanceMonitor';
-import BigNumber from "bignumber.js";
 
 export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   private _result: { success: boolean; result: IArbOperationExecuteResult<T>; };
@@ -28,8 +28,8 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   }
 
   toString(): string {
-    let dataParams1 = this.toJSON();
-    return `OP-${this.type()}-${this.id()}${dataParams1 ? `-${typeof dataParams1 === "string" ? dataParams1 : JSON.stringify(dataParams1)}` : ''}`;
+    const dataParamsJSON = this.toJSON();
+    return `OP-${this.type()}-${this.id()}${dataParamsJSON ? `-${typeof dataParamsJSON === "string" ? dataParamsJSON : JSON.stringify(dataParamsJSON)}` : ''}`;
   }
 
   public execute<B extends boolean>(arbWallet: ArbWallet, balanceMonitor: BalanceMonitor): Promise<{ success: B, result: B extends true ? IOperationResult<T> : IFailingArbInfo }>;
@@ -58,28 +58,5 @@ export abstract class ArbOperation<T extends SwapMoveOperationsType> {
   getResult<B extends boolean>(): { success: B, result: B extends true ? IOperationResult<T> : IFailingArbInfo } | null;
   getResult(): { success: boolean, result: IArbOperationExecuteResult<T> } | null {
     return this._result;
-  }
-}
-
-export abstract class ArbOperationSequenced<T extends SwapMoveOperationsType> extends ArbOperation<T> {
-  protected constructor(public readonly data: IOperationData<T>, protected readonly shouldLogInDetails: boolean = true) {
-    super(data, shouldLogInDetails);
-  }
-
-  protected async resolveArbOperationAmount({amount, token}: {
-    amount: BigNumber | ArbOperation<SwapMoveOperationsType>,
-    token: SwapToken,
-  }, arbWallet, balanceMonitor): Promise<Amount | IFailingArbInfo> {
-    let resolvedAmount, arbOperation;
-    if (BigNumber.isBigNumber(amount)) {
-      resolvedAmount = amount;
-    } else {
-      arbOperation = await amount.execute(arbWallet, balanceMonitor);
-      resolvedAmount = arbOperation.success ? arbOperation.result.amount : new BigNumber(arbOperation.result?.internal || 0);
-    }
-    if ((arbOperation && !arbOperation?.success) || resolvedAmount.isEqualTo(0)) {
-      return arbOperation.result;
-    }
-    return resolvedAmount;
   }
 }

@@ -116,6 +116,7 @@ export const PRICE_IDS_ALL = {
   ...PRICE_IDS,
   ...getCoinGeckoMap(),
 };
+// tslint:disable-next-line:no-string-literal
 delete PRICE_IDS_ALL['undefined'];
 
 export type Prices = Record<Token, number>;
@@ -138,7 +139,8 @@ export async function subscribePrices(): Promise<Observable<Prices>> {
 }
 
 export const PRICE_ID_TOKENS = _.invert(PRICE_IDS_ALL);
-delete PRICE_ID_TOKENS['undefined'];
+PRICE_ID_TOKENS.qatom = 'qatom';
+delete PRICE_ID_TOKENS.undefined;
 
 async function getPrices(): Promise<Record<string, number>> {
   let prices;
@@ -149,6 +151,10 @@ async function getPrices(): Promise<Record<string, number>> {
     logger.error(err);
     prices = CACHED_PRICES;
   }
+  // TODO: fix qATOM price feed for proper win prediction.
+  //  hardcoded works for approx. winUSD estimation, but it has ~23% price increase per year compared to atom
+  prices.qatom = prices.cosmos;
+
   CACHED_PRICES = prices;
   return _.fromPairs(_.map(prices, (price, key) => {
     const token = PRICE_ID_TOKENS[key];
