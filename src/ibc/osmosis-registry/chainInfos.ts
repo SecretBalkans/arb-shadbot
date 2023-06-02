@@ -57,7 +57,7 @@ const chainInfos = (
         OSMOSIS_RPC_OVERWRITE ??
         (IS_TESTNET
           ? 'https://rpc.testnet.osmosis.zone/'
-          : 'https://osmosis-rpc.quickapi.com:443'),
+          : 'https://rpc-osmosis.ecostake.com'),
       rest:
         OSMOSIS_REST_OVERWRITE ??
         (IS_TESTNET
@@ -217,7 +217,7 @@ const chainInfos = (
           isStakeCurrency: true,
           isFeeCurrency: true,
           gasPriceStep: {
-            low: 0.05,
+            low: 0.088,
             average: 0.1,
             high: 0.25,
           },

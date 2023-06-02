@@ -60,11 +60,17 @@ const dexOriginChains: Record<DexProtocolName, CHAIN> = { osmosis: CHAIN.Osmosis
 export function getDexOriginChain(dex: DexProtocolName) {
   return dexOriginChains[dex];
 }
+// TODO: use logic from arbjs
+const AXELAR_CURRENCY_OVERRIDES = {
+  ETH: 'WETH'
+};
 export function getTokenDenomInfo(token: Token, isWrapped = false): DenomInfo {
-  for (let otherChain of SUPPORTED_CHAINS) {
+  for (const otherChain of SUPPORTED_CHAINS) {
     const otherChainInfo = getChainInfo(otherChain);
-    let curr = otherChainInfo.currencies.find(d => {
-      return token === d.coinDenom.replace('-',''); // stkd-SCRT > stkdSCRT
+    const curr = otherChainInfo.currencies.find(d => {
+      let currencyDenom = d.coinDenom.replace('-','');
+      currencyDenom = otherChain === CHAIN.Axelar ? AXELAR_CURRENCY_OVERRIDES[currencyDenom] || currencyDenom : currencyDenom
+      return token === currencyDenom; // stkd-SCRT > stkdSCRT
     });
     if (curr) {
       return {
